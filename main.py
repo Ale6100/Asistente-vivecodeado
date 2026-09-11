@@ -1,0 +1,201 @@
+"""
+=============================================================
+ANTIGRAVITY VOICE ASSISTANT (Control por Voz y Texto para 'agy')
+=============================================================
+"""
+import sys
+import os
+
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+
+import threading
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+from rich.markdown import Markdown
+from pynput import keyboard
+
+try:
+    import msvcrt
+    MSVCRT_AVAILABLE = True
+except ImportError:
+    MSVCRT_AVAILABLE = False
+
+import config
+import sound_effects
+from audio_engine import AudioEngine
+from transcriber import WhisperTranscriber
+from cli_launcher import AgyLauncher
+from system_controller import SystemController
+
+console = Console()
+
+manual_trigger_event = threading.Event()
+
+def on_hotkey_triggered():
+    manual_trigger_event.set()
+
+def setup_hotkey_listener():
+    hotkey = config.HOTKEY_PUSH_TO_TALK.strip()
+    if not hotkey.startswith("<") and not "+" in hotkey:
+        formatted_hotkey = f"<{hotkey.lower()}>"
+    else:
+        formatted_hotkey = hotkey.lower()
+
+    try:
+        hotkeys = keyboard.GlobalHotKeys({
+            formatted_hotkey: on_hotkey_triggered
+        })
+        hotkeys.start()
+        return hotkeys, formatted_hotkey
+    except Exception:
+        return None, hotkey
+
+def print_banner(formatted_hotkey: str, mic_name: str, working_dir: str):
+    wake_display = ", ".join([w.replace("_", " ").title() for w in config.WAKE_WORDS])
+    tts_status = f"Activada ({config.TTS_RATE})" if getattr(config, "TTS_ENABLED", True) else "Desactivada"
+
+    table = Table(show_header=False, box=None, padding=(0, 1))
+    table.add_row("🗣️ [bold cyan]Palabra de activación:[/bold cyan]", f"[bold green]{wake_display}[/bold green]")
+    table.add_row("⌨️ [bold cyan]Atajo de voz (Toggle):[/bold cyan]", f"[bold green]{formatted_hotkey}[/bold green]")
+    table.add_row("📝 [bold cyan]Modo escritura por teclado:[/bold cyan]", "[bold yellow]Pulsa [Enter] o [T][/bold yellow]")
+    table.add_row("📁 [bold cyan]Repositorio / Carpeta activa:[/bold cyan]", f"[bold yellow]{working_dir}[/bold yellow]")
+    table.add_row("🔊 [bold cyan]Respuesta por voz (TTS):[/bold cyan]", f"[bold green]{tts_status}[/bold green]")
+    table.add_row("🎙️ [bold cyan]Micrófono:[/bold cyan]", f"[white]{mic_name}[/white]")
+
+    panel = Panel(
+        table,
+        title="[bold blue]🤖 ANTIGRAVITY VOICE & TEXT ASSISTANT[/bold blue]",
+        subtitle="[dim]Presiona Ctrl+C para salir[/dim]",
+        border_style="bright_blue"
+    )
+    console.print(panel)
+
+def process_instruction(prompt: str, launcher: AgyLauncher, system_controller: SystemController) -> bool:
+    handled, message, should_exit = system_controller.handle_command(prompt)
+    if should_exit:
+        console.print(f"\n[bold red]🛑 {message}[/bold red]")
+        if getattr(config, "TTS_ENABLED", True):
+            launcher.speaker.speak(message)
+        return False
+
+    if handled:
+        panel = Panel(
+            Markdown(message),
+            title="[bold green]⚡ Acción del Sistema[/bold green]",
+            border_style="green",
+            padding=(1, 2)
+        )
+        console.print(panel)
+        sound_effects.play_success()
+        if getattr(config, "TTS_ENABLED", True):
+            launcher.speaker.speak(message)
+        return True
+
+    launcher.execute_prompt(prompt)
+    return True
+
+def handle_text_mode(launcher: AgyLauncher, audio_engine: AudioEngine, system_controller: SystemController) -> bool:
+    """
+    Pausa el micrófono temporalmente para permitir escribir una orden por teclado
+    o cambiar de repositorio con '/cd <ruta>'.
+    """
+    audio_engine.pause()
+    console.print("\n[bold cyan]⌨️ Modo Escritura activado.[/bold cyan]")
+    console.print("[dim]Escribe tu orden para Antigravity, o '/cd <ruta>' para cambiar de proyecto (Enter vacío para cancelar):[/dim]")
+
+    try:
+        user_input = input("👉 ").strip()
+    except Exception:
+        user_input = ""
+
+    continue_running = True
+    if user_input:
+        if user_input.lower().startswith(("/cd ", "cd ", "/dir ", "/folder ")):
+            _, path = user_input.split(" ", 1)
+            ok, msg = launcher.set_working_directory(path)
+            if ok:
+                console.print(f"[bold green]📁 Carpeta cambiada a:[/bold green] {launcher.working_directory}")
+                launcher.speaker.speak(f"Carpeta cambiada a {os.path.basename(launcher.working_directory)}")
+            else:
+                console.print(f"[bold red]❌ Error:[/bold red] {msg}")
+                sound_effects.play_error()
+        else:
+            continue_running = process_instruction(user_input, launcher, system_controller)
+
+    audio_engine.start()
+    console.print("\n[bold green]🟢 Listo.[/bold green] Esperando comando por voz o pulsa [Enter] para escribir...\n")
+    return continue_running
+
+def main():
+    console.print("[bold yellow]Iniciando Antigravity Voice Assistant...[/bold yellow]\n")
+
+    hotkey_listener, formatted_hotkey = setup_hotkey_listener()
+
+    try:
+        audio_engine = AudioEngine()
+        transcriber = WhisperTranscriber()
+        launcher = AgyLauncher()
+        system_controller = SystemController(speaker=launcher.speaker)
+    except Exception as e:
+        console.print(f"[bold red]❌ Error al inicializar:[/bold red] {e}")
+        return
+
+    print_banner(formatted_hotkey, audio_engine.device_name, launcher.working_directory)
+    wake_display = config.WAKE_WORDS[0].replace("_", " ").title()
+    console.print(f"\n[bold green]🟢 Listo.[/bold green] Di '[bold cyan]{wake_display}[/bold cyan]', presiona '[bold cyan]{formatted_hotkey}[/bold cyan]', o pulsa '[bold cyan]Enter[/bold cyan]' para escribir.\n")
+
+    audio_engine.start()
+
+    try:
+        while True:
+            # 1. Modo teclado (Enter o T)
+            if MSVCRT_AVAILABLE and msvcrt.kbhit():
+                key = msvcrt.getwch()
+                if key in ('\r', '\n', 't', 'T'):
+                    keep_going = handle_text_mode(launcher, audio_engine, system_controller)
+                    if not keep_going:
+                        break
+                    continue
+
+            # 2. Modo voz
+            is_wake_word = audio_engine.check_wake_word()
+            is_manual_key = manual_trigger_event.is_set()
+
+            if is_wake_word or is_manual_key:
+                manual_trigger_event.clear()
+
+                audio_data = audio_engine.record_user_instruction(stop_event=manual_trigger_event)
+
+                if audio_data is not None and len(audio_data) > 0:
+                    with console.status("[bold yellow]Procesando...[/bold yellow]", spinner="dots"):
+                        raw_prompt = transcriber.transcribe(audio_data)
+                        clean_prompt, is_valid, reason = transcriber.clean_and_validate(raw_prompt)
+
+                    if is_valid:
+                        console.print(f"[bold green]📝 Instrucción:[/bold green] \"{clean_prompt}\"")
+                        keep_going = process_instruction(clean_prompt, launcher, system_controller)
+                        if not keep_going:
+                            break
+                    else:
+                        console.print(f"[yellow]⚠️ {reason}. Descartado.[/yellow]")
+                        sound_effects.play_error()
+                else:
+                    console.print("[dim]Grabación descartada o vacía.[/dim]")
+
+                console.print("\n[bold green]🟢 Listo.[/bold green] Esperando comando...\n")
+
+    except KeyboardInterrupt:
+        console.print("\n[bold red]🛑 Deteniendo asistente... Hasta luego.[/bold red]")
+    except Exception as e:
+        console.print(f"\n[bold red]❌ Error:[/bold red] {e}")
+    finally:
+        audio_engine.close()
+        if hotkey_listener is not None:
+            hotkey_listener.stop()
+
+if __name__ == "__main__":
+    main()

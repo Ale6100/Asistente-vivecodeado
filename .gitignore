@@ -1,0 +1,30 @@
+# Entornos virtuales
+venv/
+.venv/
+env/
+ENV/
+
+# Python bytecode y caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+# Caches de modelos y librerias
+.cache/
+huggingface/
+openwakeword/
+
+# Archivos de audio temporales
+*.mp3
+*.wav
+
+# IDEs y editores
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# Logs y volcados
+*.log
+*.tmp

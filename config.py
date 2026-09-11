@@ -1,0 +1,60 @@
+"""
+Configuración del Asistente por Voz para Antigravity CLI (agy)
+"""
+
+# ==========================================
+# 1. PALABRA DE ACTIVACIÓN (WAKE WORD)
+# ==========================================
+WAKE_WORDS = ["hey_jarvis"]
+WAKE_WORD_THRESHOLD = 0.5
+
+# ==========================================
+# 2. TECLA DE ATAJO GLOBAL (PUSH-TO-TALK / TOGGLE)
+# ==========================================
+HOTKEY_PUSH_TO_TALK = "f8"
+
+# ==========================================
+# 3. CONFIGURACIÓN DE AUDIO Y MICRÓFONO
+# ==========================================
+SAMPLE_RATE = 16000
+AUDIO_CHANNELS = 1
+INPUT_DEVICE_INDEX = None
+
+SILENCE_THRESHOLD = 0.001
+SILENCE_DURATION = 2.2
+MIN_RECORD_SECONDS = 1.5
+MAX_RECORD_SECONDS = 25.0
+
+# ==========================================
+# 4. CONFIGURACIÓN DE WHISPER (STT)
+# ==========================================
+WHISPER_MODEL_SIZE = "small"
+WHISPER_LANGUAGE = "es"
+WHISPER_DEVICE = "cpu"
+WHISPER_COMPUTE_TYPE = "int8"
+
+WHISPER_PROMPT_BIAS = (
+    "Transcripción limpia en español de instrucciones de desarrollo para Antigravity CLI: "
+    "Hola mundo, crear función, git status, git commit, refactorizar código, "
+    "corregir bug, crear componente, endpoint de API, ejecutar servidor, "
+    "instalar paquete, python, javascript, typescript, docker, terminal, archivo."
+)
+
+# ==========================================
+# 5. INTEGRACIÓN CON ANTIGRAVITY CLI (AGY)
+# ==========================================
+CONTINUE_PREVIOUS_CONVERSATION = True
+AGY_COMMAND = "agy"
+DEFAULT_PROJECT_DIR = None
+
+# ==========================================
+# 6. RESPUESTA POR VOZ (TEXT-TO-SPEECH - TTS)
+# ==========================================
+TTS_ENABLED = False
+TTS_VOICE = "es-ES-AlvaroNeural"
+TTS_RATE = "+25%"
+
+# ==========================================
+# 7. FEEDBACK AUDIBLE (BEEPS)
+# ==========================================
+SOUND_FEEDBACK_ENABLED = True

@@ -91,7 +91,11 @@ COMMAND_PREFIX_PATTERN = r'^(?:por\s+favor\s+|podrías\s+|podrias\s+|podés\s+|p
 EXPLANATORY_PREFACES_PATTERN = re.compile(
     r'^(?:noto\b|veo\b|siento\b|cuando\b|si\b|por\s+ejemplo\b|ejemplo\b|te\s+(?:decía|decia|dije|estaba|quiero|quería|queria)\b|'
     r'por\s+qué\b|porque\b|¿por\s+qué\b|explicar\b|no\s+es\s+necesario\b|no\s+hace\s+falta\b|acabo\s+de\b|'
-    r'notas\b|viste\b|sabes\b|sabés\b|te\s+pregunto\b|pregunta\b|consulta\b)',
+    r'notas\b|viste\b|sabes\b|sabés\b|te\s+pregunto\b|pregunta\b|consulta\b|'
+    r'en\s+realidad\b|creo\b|creo\s+que\b|me\s+parece\b|estaba\s+pensando\b|o\s+sea\b|por\s+casualidad\b|'
+    r'te\s+quería\s+preguntar\b|ayudame\b|ayúdame\b|decime\b|mostrame\b|muéstrame\b|'
+    r'no\s+quiero\b|quiero\s+saber\b|vos\s+podrías\b|vos\s+podrias\b|vos\s+podés\b|vos\s+podes\b|'
+    r'qué\s+onda\b|que\s+onda\b|cómo\s+es\b|como\s+es\b)',
     re.IGNORECASE
 )
 
@@ -180,30 +184,39 @@ class SystemController:
         if EXPLANATORY_PREFACES_PATTERN.search(lower):
             return False, "", False, False
 
-        if re.search(r'\b(basta|apagate|apágate|cerrar asistente|apagar asistente|adios|adiós|salir del asistente)\b', lower):
+        # Si el texto es una pregunta o una frase reflexiva/conversacional, derivar a la IA
+        if ('?' in cleaned or '¿' in cleaned) and not re.match(COMMAND_PREFIX_PATTERN + r'(?:¿?\s*(?:qué|que)\s+hora\s+es\??|¿?\s*(?:qué|que)\s+(?:fecha|día|dia)\s+es\??)$', lower):
+            return False, "", False, False
+
+        # Si es una frase larga (más de 9 palabras) que no sea un comando explícito estructurado de búsqueda o multimedia
+        words = lower.split()
+        if len(words) > 9 and not re.match(COMMAND_PREFIX_PATTERN + r'(?:buscar|reproducir|poner|poné)\b', lower):
+            return False, "", False, False
+
+        if re.match(COMMAND_PREFIX_PATTERN + r'(?:basta|apagate|apágate|cerrar\s+asistente|apagar\s+asistente|adios|adiós|salir\s+del\s+asistente)$', lower):
             return True, "Hasta luego. Cerrando asistente.", True, False
 
-        if re.search(r'\b(modo discreto|silenciar voz|silencio total|muteate|mutéate|silenciate|silénciate|sin audio|sin voz|no hables|quedate mudo|quéditate mudo)\b', lower):
+        if re.match(COMMAND_PREFIX_PATTERN + r'(?:modo\s+discreto|silenciar\s+voz|silencio\s+total|muteate|mutéate|silenciate|silénciate|sin\s+audio|sin\s+voz|no\s+hables|quedate\s+mudo|quéditate\s+mudo)$', lower):
             config.TTS_ENABLED = False
             return True, "Modo discreto activado. Respuestas únicamente por texto.", False, False
 
-        if re.search(r'\b(activar voz|modo hablado|desactivar silencio|hablar|desmuteate|desmutéate)\b', lower):
+        if re.match(COMMAND_PREFIX_PATTERN + r'(?:activar\s+voz|modo\s+hablado|desactivar\s+silencio|hablar|desmuteate|desmutéate)$', lower):
             config.TTS_ENABLED = True
             return True, "Voz activada.", False, True
 
-        if re.search(r'\b(qué hora es|que hora es|la hora|dime la hora|decime la hora)\b', lower):
+        if re.match(COMMAND_PREFIX_PATTERN + r'(?:qué\s+hora\s+es|que\s+hora\s+es|la\s+hora|dime\s+la\s+hora|decime\s+la\s+hora)$', lower):
             now = datetime.now()
             hora_mensaje = f"Son las {now.hour}:{now.minute:02d}."
             return True, hora_mensaje, False, True
 
-        if re.search(r'\b(qué fecha es|que fecha es|qué día es|que dia es|la fecha|dime la fecha|decime la fecha)\b', lower):
+        if re.match(COMMAND_PREFIX_PATTERN + r'(?:qué\s+fecha\s+es|que\s+fecha\s+es|qué\s+día\s+es|que\s+dia\s+es|la\s+fecha|dime\s+la\s+fecha|decime\s+la\s+fecha)$', lower):
             now = datetime.now()
             dia = DIAS_SEMANA[now.weekday()]
             mes = MESES_ANIO[now.month - 1]
             fecha_mensaje = f"Hoy es {dia} {now.day} de {mes} de {now.year}."
             return True, fecha_mensaje, False, True
 
-        if re.search(r'\b(así otra|asi otra|otra|otra más|otro más|sacá otra|saca otra|hacé otra|hace otra|otra captura|repetir captura)\b', lower):
+        if re.match(COMMAND_PREFIX_PATTERN + r'(?:así\s+otra|asi\s+otra|otra|otra\s+más|otro\s+más|sacá\s+otra|saca\s+otra|hacé\s+otra|hace\s+otra|otra\s+captura|repetir\s+captura)$', lower):
             if self.last_action == "screenshot":
                 ruta_captura = take_screenshot()
                 if ruta_captura:
@@ -220,68 +233,68 @@ class SystemController:
                     time.sleep(0.02)
                 return True, "Volumen reducido.", False, False
 
-        if re.search(r'\b(captura de pantalla|sacar captura|sacá una captura|hacer captura|screenshot)\b', lower):
+        if re.match(COMMAND_PREFIX_PATTERN + r'(?:(?:sacar|sacá|saca|hacer|hacé|hace|tomar|tomá|toma)\s+(?:una\s+)?captura(?:\s+de\s+pantalla)?(?:\s+del?\s+escritorio)?|captura\s+de\s+pantalla|captura|screenshot)$', lower):
             self.last_action = "screenshot"
             ruta_captura = take_screenshot()
             if ruta_captura:
                 return True, f"Captura de pantalla guardada en: {ruta_captura}", False, False
             return True, "No se pudo tomar la captura de pantalla.", False, False
 
-        if re.search(r'\b(minimizar todo|mostrar escritorio|minimiza todo|minimizá todo|minimiza|minimizá|minimizar)\b', lower):
+        if re.match(COMMAND_PREFIX_PATTERN + r'(?:minimizar\s+todo|mostrar\s+escritorio|minimiza\s+todo|minimizá\s+todo|mostrar\s+el\s+escritorio)$', lower):
             subprocess.run(["powershell", "-NoProfile", "-Command", "(New-Object -ComObject Shell.Application).MinimizeAll()"], capture_output=True)
             return True, "Ventanas minimizadas.", False, False
 
-        if re.search(r'\b(?:ordenar|ordená|ordena|ordenes|ordenés)\s+(?:los\s+)?(?:elementos|iconos|archivos)?\s*(?:de(?:l|\s+mi)\s+)?escritorio\b', lower):
+        if re.match(COMMAND_PREFIX_PATTERN + r'(?:ordenar|ordená|ordena|ordenes|ordenés)\s+(?:los\s+)?(?:elementos|iconos|archivos)?\s*(?:de(?:l|\s+mi)\s+)?escritorio$', lower):
             if sort_desktop_alphabetically():
                 return True, "Elementos del escritorio ordenados en orden alfabético.", False, False
             return True, "No se pudieron ordenar los elementos del escritorio.", False, False
 
-        if re.search(r'\b(cerrar ventana|cerrar programa|cerrar archivo|cierra el programa|cerrá el programa)\b', lower):
+        if re.match(COMMAND_PREFIX_PATTERN + r'(?:cerrar\s+ventana|cerrar\s+programa|cerrar\s+archivo|cierra\s+el\s+programa|cerrá\s+el\s+programa|cerrar\s+esta\s+ventana)$', lower):
             send_key_combo(VK_MENU, VK_F4)
             return True, "Ventana cerrada.", False, False
 
-        if re.search(r'\b(minimizar ventana|minimiza la ventana|minimizá la ventana)\b', lower):
+        if re.match(COMMAND_PREFIX_PATTERN + r'(?:minimizar\s+ventana|minimiza\s+la\s+ventana|minimizá\s+la\s+ventana)$', lower):
             send_key_combo(VK_MENU, 0x20)
             time.sleep(0.05)
             send_key_tap(ord('N'))
             return True, "Ventana minimizada.", False, False
 
-        match_atajo = re.search(r'\batajo (\d)\b', lower)
+        match_atajo = re.match(COMMAND_PREFIX_PATTERN + r'atajo\s+(\d)$', lower)
         if match_atajo:
             num = int(match_atajo.group(1))
             if 1 <= num <= 9:
                 send_key_combo(VK_LWIN, ord(str(num)))
                 return True, f"Abriendo atajo {num}.", False, False
 
-        if re.search(r'\b(mute|silenciar|mutear|desmutear|quitar mute)\b', lower):
+        if re.match(COMMAND_PREFIX_PATTERN + r'(?:mute|silenciar|mutear|desmutear|quitar\s+mute)$', lower):
             send_key_tap(VK_VOLUME_MUTE)
             return True, "Silencio alternado.", False, False
 
-        if re.search(r'\b(subir volumen|sube el volumen|subí el volumen|más volumen)\b', lower):
+        if re.match(COMMAND_PREFIX_PATTERN + r'(?:subir\s+volumen|sube\s+el\s+volumen|subí\s+el\s+volumen|más\s+volumen)$', lower):
             self.last_action = "volume_up"
             for _ in range(5):
                 send_key_tap(VK_VOLUME_UP)
                 time.sleep(0.02)
             return True, "Volumen aumentado.", False, False
 
-        if re.search(r'\b(bajar volumen|baja el volumen|bajá el volumen|menos volumen)\b', lower):
+        if re.match(COMMAND_PREFIX_PATTERN + r'(?:bajar\s+volumen|baja\s+el\s+volumen|bajá\s+el\s+volumen|menos\s+volumen)$', lower):
             self.last_action = "volume_down"
             for _ in range(5):
                 send_key_tap(VK_VOLUME_DOWN)
                 time.sleep(0.02)
             return True, "Volumen reducido.", False, False
 
-        match_vol = re.search(r'\bvolumen al (\d{1,3})\b', lower)
+        match_vol = re.match(COMMAND_PREFIX_PATTERN + r'(?:poner\s+|poné\s+|ajustar\s+)?volumen\s+al\s+(\d{1,3})%?$', lower)
         if match_vol:
             pct = int(match_vol.group(1))
             self._set_volume_percentage(pct)
             return True, f"Volumen ajustado al {pct} por ciento.", False, False
 
-        if re.search(r'\b(iniciar|iniciá|comenzar|comenzá) cronómetro\b', lower):
+        if re.match(COMMAND_PREFIX_PATTERN + r'(?:iniciar|iniciá|comenzar|comenzá)\s+cronómetro$', lower):
             self.stopwatch_start_time = time.time()
             return True, "Cronómetro iniciado.", False, False
 
-        if re.search(r'\b(detener|detené|parar|pará) cronómetro\b', lower):
+        if re.match(COMMAND_PREFIX_PATTERN + r'(?:detener|detené|parar|pará)\s+cronómetro$', lower):
             if self.stopwatch_start_time is None:
                 return True, "El cronómetro no está iniciado.", False, True
             transcurrido = int(time.time() - self.stopwatch_start_time)
@@ -292,7 +305,7 @@ class SystemController:
                 return True, f"Cronómetro detenido en {minutos} minutos y {segundos} segundos.", False, True
             return True, f"Cronómetro detenido en {segundos} segundos.", False, True
 
-        if re.search(r'\b(tiempo del cronómetro|cuánto va del cronómetro|cuanto va del cronometro)\b', lower):
+        if re.match(COMMAND_PREFIX_PATTERN + r'(?:tiempo\s+del\s+cronómetro|cuánto\s+va\s+del\s+cronómetro|cuanto\s+va\s+del\s+cronometro)$', lower):
             if self.stopwatch_start_time is None:
                 return True, "El cronómetro no está iniciado.", False, True
             transcurrido = int(time.time() - self.stopwatch_start_time)
@@ -302,7 +315,7 @@ class SystemController:
                 return True, f"El cronómetro lleva {minutos} minutos y {segundos} segundos.", False, True
             return True, f"El cronómetro lleva {segundos} segundos.", False, True
 
-        match_alarm = re.search(r'\b(?:alarma|temporizador|recordatorio|recuérdame|recordame)\b.*?\b(\d+)\s*(minuto|minutos|segundo|segundos)\b', lower)
+        match_alarm = re.match(COMMAND_PREFIX_PATTERN + r'(?:poner\s+|poné\s+|iniciar\s+|programar\s+)?(?:una\s+)?(?:alarma|temporizador|recordatorio)\s+(?:de|para\s+dentro\s+de)?\s*(\d+)\s*(minuto|minutos|segundo|segundos)$', lower)
         if match_alarm:
             qty = int(match_alarm.group(1))
             unit = match_alarm.group(2)

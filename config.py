@@ -35,7 +35,6 @@ WHISPER_DEVICE = "cpu"
 WHISPER_COMPUTE_TYPE = "int8"
 
 WHISPER_PROMPT_BIAS = (
-    "Transcripción limpia en español de instrucciones de desarrollo para Antigravity CLI: "
     "Hola mundo, crear función, git status, git commit, refactorizar código, "
     "corregir bug, crear componente, endpoint de API, ejecutar servidor, "
     "instalar paquete, python, javascript, typescript, docker, terminal, archivo, "

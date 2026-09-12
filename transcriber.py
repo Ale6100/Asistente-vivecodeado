@@ -78,7 +78,22 @@ class WhisperTranscriber:
         if normalized_lower in CANCEL_PHRASES:
             return cleaned, False, f"Cancelación detectada ('{cleaned}')"
 
-        # 6. Detección de titubeo incompleto (menos de 2 palabras con significado)
+        # 6. Detección de alucinaciones comunes de Whisper o filtraciones de prompt
+        hallucination_patterns = [
+            r'transcripci[oó]n limpia en espa[ñn]ol',
+            r'instrucciones de desarrollo para',
+            r'subt[ií]tulos por la comunidad',
+            r'amara\.org',
+            r'gracias por ver',
+            r'suscr[ií]bete',
+            r'hasta el pr[oó]ximo video',
+            r'hasta la pr[oó]xima',
+        ]
+        for pattern in hallucination_patterns:
+            if re.search(pattern, normalized_lower):
+                return cleaned, False, f"Alucinación de Whisper detectada ('{cleaned}')"
+
+        # 7. Detección de titubeo incompleto (menos de 2 palabras con significado)
         words = [w for w in cleaned.split() if len(w) > 1]
         if len(words) < 2:
             return cleaned, False, f"Titubeo o frase incompleta ('{cleaned}')"

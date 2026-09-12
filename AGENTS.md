@@ -48,3 +48,23 @@ El proyecto lo construye un equipo con experiencia variable según el dominio. L
 - Si una decisión actual va a complicar el futuro (modelado flojo, acoplamiento innecesario, dependencias pesadas, etc.), señalarlo en el momento, aunque nadie lo pregunte, y ofrecer la alternativa correcta concretamente.
 - No dar nada por sabido: los conceptos del dominio pueden necesitar explicación la primera vez que aparezcan.
 - Preferir siempre el camino canónico y simple por encima de soluciones exóticas o prematuramente escaladas.
+
+## Autonomía técnica: programar y ejecutar soluciones ante limitaciones
+
+Siempre que se solicite una acción o tarea para la cual no exista un comando directo, herramienta nativa o función preconstruida en el sistema:
+
+- **Programar la solución por iniciativa propia**: No limitarse a responder con una limitación, imposibilidad o falta de comando nativo. Si es técnicamente viable resolverlo mediante software o automatización, el agente debe idear, escribir y ejecutar su propia solución a medida (creando scripts o utilidades en Python, PowerShell, C# u otra tecnología adecuada).
+- **Ejecución y verificación completa**: Desarrollar el código necesario, compilarlo si aplica, ejecutarlo para cumplir la orden y validar el resultado final de punta a punta.
+- **Ubicación organizada en `tools/`**: Todo script auxiliar, programa a medida, código fuente compilable o binario (`.cs`, `.exe`, scripts de automatización externos) debe ubicarse de forma ordenada dentro de la carpeta `tools/` (o subcarpetas específicas dentro de ella), **nunca suelto en la raíz del proyecto**. Si el código principal del asistente necesita invocar el ejecutable o script, debe buscarlo dentro del directorio `tools/`.
+- **Utilidad real y eliminación de redundancias**: No mantener archivos intermedios o en desuso. Todo archivo que resida en el proyecto o en `tools/` debe tener una función activa y justificada. Si una tarea genera un binario ejecutable que es el único consumido en ejecución, se debe evitar dejar archivos de código intermedios en desuso que confundan o generen redundancia, a menos que exista una necesidad explícita de compilación dinámica.
+- **Transparencia y prolijidad**: Explicar con naturalidad y claridad al usuario qué mecanismo se diseñó para resolver el problema, manteniendo el entorno de trabajo limpio y ordenado.
+
+## Portabilidad absoluta y compatibilidad universal (Windows 10 y 11)
+
+El asistente y todas las herramientas complementarias que se desarrollen deben ser **100% portables** y operar de forma transparente en cualquier equipo con Windows 10 o Windows 11 sin requerir modificaciones ni configuraciones manuales:
+
+- **Prohibición estricta de referencias locales**: Queda totalmente prohibido incluir rutas absolutas fijas (como `C:\Users\<usuario>`), nombres de usuario, identificadores de máquina o referencias a dispositivos de hardware específicos.
+- **Resolución dinámica de rutas y recursos**: Todas las rutas deben obtenerse de forma relativa o dinámica utilizando `os.path.dirname(os.path.abspath(__file__))`, `os.path.expanduser("~")`, variables de entorno estándar de Windows (`%USERPROFILE%`, `%APPDATA%`, `%TEMP%`) o APIs de Windows (`CSIDL_DESKTOP`, COM Shell, etc.).
+- **Diseño agnóstico en `tools/` y scripts auxiliares**: Las utilidades nuevas que se desarrollen deben apoyarse exclusivamente en APIs estándar de Windows, interfaces COM nativas o librerías universales, asegurando que funcionen idénticamente en cualquier instalación limpia de Windows 10 u 11.
+
+

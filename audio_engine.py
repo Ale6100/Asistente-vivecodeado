@@ -92,6 +92,7 @@ class AudioEngine:
         self.audio_queue = queue.Queue(maxsize=200)
         self.ambient_rms = 0.0003
         self.is_running = False
+        self.is_recording_instruction = False
 
         print("🧠 Cargando modelo openWakeWord...")
         try:
@@ -144,7 +145,8 @@ class AudioEngine:
             resampled = np.pad(resampled, (0, TARGET_CHUNK_SIZE - len(resampled)))
 
         chunk_rms = float(np.sqrt(np.mean(resampled ** 2)))
-        self.ambient_rms = 0.97 * self.ambient_rms + 0.03 * chunk_rms
+        if not self.is_recording_instruction:
+            self.ambient_rms = 0.97 * self.ambient_rms + 0.03 * chunk_rms
 
         int16_frame = (resampled * 32767.0).clip(-32768, 32767).astype(np.int16)
         float32_frame = resampled.astype(np.float32)
@@ -226,6 +228,7 @@ class AudioEngine:
         console.print("\n🎤 [bold red]🔴 Escuchando...[/bold red]")
 
         self.clear_queue()
+        self.is_recording_instruction = True
 
         recorded_chunks = []
         has_detected_speech = False
@@ -234,35 +237,43 @@ class AudioEngine:
 
         speech_threshold = max(self.ambient_rms * 1.8, config.SILENCE_THRESHOLD)
 
-        while True:
-            if stop_event is not None and stop_event.is_set():
-                stop_event.clear()
-                break
+        try:
+            while True:
+                if stop_event is not None and stop_event.is_set():
+                    stop_event.clear()
+                    break
 
-            try:
-                _, float32_frame = self.audio_queue.get(timeout=0.25)
-            except queue.Empty:
-                continue
+                try:
+                    _, float32_frame = self.audio_queue.get(timeout=0.25)
+                except queue.Empty:
+                    continue
 
-            recorded_chunks.append(float32_frame)
+                recorded_chunks.append(float32_frame)
 
-            rms = float(np.sqrt(np.mean(float32_frame ** 2)))
-            current_time = time.time()
-            elapsed_time = current_time - start_time
+                rms = float(np.sqrt(np.mean(float32_frame ** 2)))
+                current_time = time.time()
+                elapsed_time = current_time - start_time
 
-            if rms > speech_threshold:
-                has_detected_speech = True
-                silence_start_time = None
-            else:
-                if has_detected_speech:
-                    if silence_start_time is None:
-                        silence_start_time = current_time
-                    elif (current_time - silence_start_time) >= config.SILENCE_DURATION:
-                        if elapsed_time >= config.MIN_RECORD_SECONDS:
-                            break
+                # Si no se detecta habla en los primeros 7 segundos tras activarse, cancelar escucha
+                if not has_detected_speech and elapsed_time >= 7.0:
+                    break
 
-            if elapsed_time >= config.MAX_RECORD_SECONDS:
-                break
+                if rms > speech_threshold:
+                    has_detected_speech = True
+                    silence_start_time = None
+                else:
+                    if has_detected_speech:
+                        if silence_start_time is None:
+                            silence_start_time = current_time
+                        elif (current_time - silence_start_time) >= config.SILENCE_DURATION:
+                            if elapsed_time >= config.MIN_RECORD_SECONDS:
+                                break
+
+                max_limit = getattr(config, "MAX_RECORD_SECONDS", 300.0)
+                if max_limit and elapsed_time >= max_limit:
+                    break
+        finally:
+            self.is_recording_instruction = False
 
         sound_effects.play_recording_stop()
 

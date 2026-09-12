@@ -34,11 +34,13 @@ flowchart TD
     L --> L4["Búsquedas Web (Netflix, YouTube, Google...)"]
     L --> L5["Temporizadores, Alarmas y Cronómetro"]
     L --> L6["Fecha, Hora y Modo Discreto"]
+    L --> L7["Organización de Escritorio (tools/SortDesktop.exe)"]
     
     K -->|"NO (Tarea de Desarrollo / IA)"| M["AgyLauncher (cli_launcher.py)"]
     M --> N["Inyección de Contexto Silencioso de Carpeta"]
-    N --> O["Aislamiento de Sesión: agy --project asistente-voz"]
-    
+    O["Aislamiento de Sesión: agy --project asistente-voz"]
+    M --> O
+
     L --> P["Feedback Acústico (sound_effects.py)"]
     O --> P
     L --> Q["TTSSpeaker (Edge-TTS 'AlvaroNeural' +25%)"]
@@ -54,6 +56,9 @@ flowchart TD
   * Solo requiere contar con Python 3.10 o superior y dispositivos de audio funcionales (micrófono y altavoces/auriculares).
   * El entorno virtual (`venv`) y todas sus dependencias se configuran automáticamente sin requerir ajustes manuales en el sistema.
   * Los modelos de IA (Faster-Whisper y openWakeWord) se descargan e inicializan de forma transparente en su primera ejecución.
+* **Portabilidad Total y Cero Dependencias de Máquina:**
+  * El código y sus utilidades complementarias en `tools/` carecen por completo de rutas absolutas hardcodeadas, nombres de usuario o identificadores locales de máquina.
+  * Todas las rutas, carpetas de trabajo y llamadas al sistema se resuelven de manera dinámica (`os.path`, variables de entorno y APIs nativas de Windows), garantizando funcionamiento inmediato y sin cambios en cualquier equipo con Windows 10 o Windows 11.
 * **Modo Híbrido (Voz + Teclado en la Misma Terminal):**
   * **Voz Manos Libres:** Actívalo diciendo la palabra de activación configurada (*"Alexa"* por defecto, o *"Hey Jarvis"*) o presionando la tecla de atajo **`F8`**.
   * **Modo Escritura Inmediato:** Pulsa **`[Enter]`** o la tecla **`[T]`** en la consola: el micrófono se pausa temporalmente para permitir tipear o pegar comandos extensos sin interferencias acústicas.
@@ -68,7 +73,7 @@ flowchart TD
   * **Sincronización Unificada de Actividad (Blackboard / Shared Context Buffer):** Las acciones ejecutadas por la vía rápida del sistema (capturas de pantalla con su ruta de guardado, ajustes de volumen, cambio de carpeta de trabajo o búsquedas) se registran en un buffer cronológico en memoria. Al consultar a la IA, este historial reciente se inyecta automáticamente en su contexto silencioso, permitiéndole saber qué se hizo en la máquina (*"¿dónde se guardó la captura?"*, *"¿qué fue lo último que te pedí?"*).
   * **Reseteo en Caliente:** Permite limpiar la memoria en cualquier momento sin reiniciar la app, ya sea por voz (*"nueva sesión"*, *"olvidá lo anterior"*, *"reiniciar memoria"*) o por teclado (`/new`, `/reset`, `/clear`). Al cambiar de carpeta con `/cd`, la memoria se renueva automáticamente.
 * **Arquitectura Híbrida de Doble Vía con Despachador de Acciones:**
-  * **Vía Rápida Local (<50 ms):** Reconoce de forma instantánea acciones mecánicas deterministas sobre el sistema operativo (control de volumen, silenciar, capturas de pantalla, minimizar ventanas, atajos de barra de tareas, temporizadores, cronómetro, fecha/hora, modo discreto y búsquedas directas). Incluye soporte de **repetición contextual inmediata** (*"otra"*, *"sacá otra"*, *"hacé otra"*, *"otra captura"*) para repetir la última acción sin latencia. Los patrones están rigurosamente anclados al inicio de la orden imperativa e incorporan filtro de cláusulas explicativas (*"noto que..."*, *"cuando te pido..."*, *"por ejemplo..."*), evitando falsos positivos cuando el usuario reflexiona o conversa.
+  * **Vía Rápida Local (<50 ms):** Reconoce de forma instantánea acciones mecánicas deterministas sobre el sistema operativo (control de volumen, silenciar, capturas de pantalla, ordenar escritorio, minimizar ventanas, atajos de barra de tareas, temporizadores, cronómetro, fecha/hora, modo discreto y búsquedas directas). Incluye soporte de **repetición contextual inmediata** (*"otra"*, *"sacá otra"*, *"hacé otra"*, *"otra captura"*) para repetir la última acción sin latencia. Los patrones están rigurosamente anclados al inicio de la orden imperativa e incorporan filtro de cláusulas explicativas (*"noto que..."*, *"cuando te pido..."*, *"por ejemplo..."*), evitando falsos positivos cuando el usuario reflexiona o conversa.
   * **Vía Inteligente (Antigravity CLI + Action Dispatcher):** Las consultas con criterios semánticos, comparativos o superlativos (*"el video más visto de..."*, *"el mejor tutorial..."*, análisis de código, control de versiones Git, etc.) son derivadas a la IA con timeout extendido (`AGY_PRINT_TIMEOUT = "20m"`). Tras razonar e investigar, la IA puede emitir directivas de escritorio (`[ACTION: OPEN_URL <url>]`, `[ACTION: OPEN_APP <app>]`, `[ACTION: SCREENSHOT]`) que el proceso local ejecuta inmediatamente en la sesión interactiva del usuario mediante `open_url_native` o APIs nativas, garantizando que los enlaces exactos y acciones se reflejen con foco en su pantalla física real.
 * **Respuesta por Voz Selectiva y Completa (TTS):**
   * **Vocalización Completa para Respuestas Relevantes:** Para preguntas, explicaciones de código, razonamiento y consultas informativas, el sintetizador pronuncia la respuesta completa de manera natural, sin cortes artificiales ni frases de truncamiento.
@@ -100,6 +105,7 @@ flowchart TD
 * **`config.py`**: Parámetros globales y ajustables del sistema (palabras clave, atajos, modelos, voz, velocidad, silencios).
 * **`iniciar_asistente.bat`**: Script de arranque para Windows. Detecta el ejecutable de Python disponible (`py -3` o `python`), genera el entorno virtual, instala dependencias y lanza el asistente manteniendo la consola visible ante cualquier error.
 * **`requirements.txt`**: Lista de dependencias del ecosistema Python necesarias para el proyecto.
+* **`tools/`**: Directorio de herramientas y binarios complementarios para interactuar con APIs del sistema operativo (contiene `SortDesktop.exe` para organizar los elementos del escritorio vía Windows Shell COM).
 * **`.gitignore`**: Exclusión de archivos binarios, cachés de modelos y entornos virtuales locales.
 * **`AGENTS.md`**: Guía y normas arquitectónicas para agentes de desarrollo.
 
@@ -213,7 +219,7 @@ Todos los parámetros del sistema se centralizan en [`config.py`](config.py):
 | `SAMPLE_RATE` | `16000` | Frecuencia de muestreo estándar requerida por Whisper y openWakeWord. |
 | `SILENCE_DURATION` | `2.2` | Segundos continuos de silencio para determinar el fin de la instrucción. |
 | `MIN_RECORD_SECONDS` | `1.5` | Duración mínima obligatoria para evitar cortes prematuros. |
-| `MAX_RECORD_SECONDS` | `25.0` | Límite máximo de seguridad para una sola grabación de audio. |
+| `MAX_RECORD_SECONDS` | `300.0` | Límite máximo de seguridad (5 minutos); la grabación finaliza al detectar silencio. |
 | `WHISPER_MODEL_SIZE` | `"small"` | Tamaño del modelo de Faster-Whisper (`tiny`, `base`, `small`, `medium`). |
 | `WHISPER_LANGUAGE` | `"es"` | Idioma forzado para transcripción precisa en español. |
 | `WHISPER_DEVICE` | `"cpu"` | Dispositivo de cómputo para inferencia (`cpu` o `cuda`). |

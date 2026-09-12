@@ -125,7 +125,8 @@ def open_url_native(url: str):
         webbrowser.open(url)
 
 def take_screenshot() -> str:
-    folder = os.path.abspath("screenshots")
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    folder = os.path.join(base_dir, "screenshots")
     os.makedirs(folder, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     target_file = os.path.join(folder, f"captura_{timestamp}.png")
@@ -148,6 +149,19 @@ $bmp.Dispose()
     except Exception:
         pass
     return ""
+
+def sort_desktop_alphabetically() -> bool:
+    try:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        exe_path = os.path.join(base_dir, "tools", "SortDesktop.exe")
+        if not os.path.exists(exe_path):
+            exe_path = os.path.join(base_dir, "SortDesktop.exe")
+        if os.path.exists(exe_path):
+            subprocess.run([exe_path], capture_output=True, check=True)
+            return True
+    except Exception:
+        pass
+    return False
 
 class SystemController:
     def __init__(self, speaker=None):
@@ -216,6 +230,11 @@ class SystemController:
         if re.search(r'\b(minimizar todo|mostrar escritorio|minimiza todo|minimizá todo|minimiza|minimizá|minimizar)\b', lower):
             subprocess.run(["powershell", "-NoProfile", "-Command", "(New-Object -ComObject Shell.Application).MinimizeAll()"], capture_output=True)
             return True, "Ventanas minimizadas.", False, False
+
+        if re.search(r'\b(?:ordenar|ordená|ordena|ordenes|ordenés)\s+(?:los\s+)?(?:elementos|iconos|archivos)?\s*(?:de(?:l|\s+mi)\s+)?escritorio\b', lower):
+            if sort_desktop_alphabetically():
+                return True, "Elementos del escritorio ordenados en orden alfabético.", False, False
+            return True, "No se pudieron ordenar los elementos del escritorio.", False, False
 
         if re.search(r'\b(cerrar ventana|cerrar programa|cerrar archivo|cierra el programa|cerrá el programa)\b', lower):
             send_key_combo(VK_MENU, VK_F4)

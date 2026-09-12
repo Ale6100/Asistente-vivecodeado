@@ -61,6 +61,7 @@ class WhisperTranscriber:
 
         # 1. Corrección fonética común: "hola mundos" -> "hola mundo"
         cleaned = re.sub(r'\bhola\s+mundos\b', 'hola mundo', cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r'\bmi\s+dudev\b', 'midudev', cleaned, flags=re.IGNORECASE)
 
         # 2. Eliminar repeticiones por tartamudeo ("crea crea un", "el el archivo")
         cleaned = re.sub(r'\b(\w+)\s+\1\b', r'\1', cleaned, flags=re.IGNORECASE)

@@ -15,10 +15,13 @@ import warnings
 import numpy as np
 import scipy.signal as signal
 import sounddevice as sd
+from rich.console import Console
 from openwakeword.model import Model
 
 import config
 import sound_effects
+
+console = Console()
 
 warnings.filterwarnings("ignore")
 logging.getLogger().setLevel(logging.ERROR)
@@ -220,7 +223,7 @@ class AudioEngine:
         Graba la instrucción del usuario permitiendo pausas naturales para pensar.
         """
         sound_effects.play_wake_detected()
-        print("\n🎤 [bold red]🔴 Escuchando...[/bold red]")
+        console.print("\n🎤 [bold red]🔴 Escuchando...[/bold red]")
 
         self.clear_queue()
 

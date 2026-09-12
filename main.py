@@ -5,6 +5,7 @@ ANTIGRAVITY VOICE ASSISTANT (Control por Voz y Texto para 'agy')
 """
 import sys
 import os
+import re
 
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
@@ -57,12 +58,15 @@ def setup_hotkey_listener():
 def print_banner(formatted_hotkey: str, mic_name: str, working_dir: str):
     wake_display = ", ".join([w.replace("_", " ").title() for w in config.WAKE_WORDS])
     tts_status = f"Activada ({config.TTS_RATE})" if getattr(config, "TTS_ENABLED", True) else "Desactivada"
+    memory_mode = getattr(config, "SESSION_MEMORY_MODE", "per_session")
+    memory_display = "Por Sesión (Limpia al iniciar)" if memory_mode == "per_session" else ("Persistente" if memory_mode == "persistent" else "Sin memoria")
 
     table = Table(show_header=False, box=None, padding=(0, 1))
     table.add_row("🗣️ [bold cyan]Palabra de activación:[/bold cyan]", f"[bold green]{wake_display}[/bold green]")
     table.add_row("⌨️ [bold cyan]Atajo de voz (Toggle):[/bold cyan]", f"[bold green]{formatted_hotkey}[/bold green]")
     table.add_row("📝 [bold cyan]Modo escritura por teclado:[/bold cyan]", "[bold yellow]Pulsa [Enter] o [T][/bold yellow]")
     table.add_row("📁 [bold cyan]Repositorio / Carpeta activa:[/bold cyan]", f"[bold yellow]{working_dir}[/bold yellow]")
+    table.add_row("🧠 [bold cyan]Memoria de conversación:[/bold cyan]", f"[bold green]{memory_display}[/bold green]")
     table.add_row("🔊 [bold cyan]Respuesta por voz (TTS):[/bold cyan]", f"[bold green]{tts_status}[/bold green]")
     table.add_row("🎙️ [bold cyan]Micrófono:[/bold cyan]", f"[white]{mic_name}[/white]")
 
@@ -74,15 +78,72 @@ def print_banner(formatted_hotkey: str, mic_name: str, working_dir: str):
     )
     console.print(panel)
 
+def try_handle_session_reset(text: str, launcher: AgyLauncher) -> bool:
+    clean = text.strip().lower()
+    reset_triggers = (
+        "/reset", "/new", "/clear", "/nueva",
+        "nueva sesión", "nueva sesion", "nueva conversación", "nueva conversacion",
+        "reiniciar sesión", "reiniciar sesion", "reiniciar memoria", "reiniciar conversación",
+        "reiniciar conversacion", "olvidar conversación", "olvidar conversacion", "olvida lo anterior",
+        "olvidá lo anterior", "olvida todo", "olvidá todo", "empezar de cero", "limpiar contexto", "limpiar memoria"
+    )
+    if clean in reset_triggers:
+        launcher.reset_conversation()
+        msg = "Sesión reiniciada. Empezamos una conversación limpia."
+        panel = Panel(
+            Markdown(msg),
+            title="[bold cyan]🔄 Memoria Reiniciada[/bold cyan]",
+            border_style="cyan",
+            padding=(1, 2)
+        )
+        console.print(panel)
+        sound_effects.play_success()
+        return True
+    return False
+
+def try_handle_directory_change(text: str, launcher: AgyLauncher) -> tuple[bool, bool]:
+    clean = text.strip()
+    clean_lower = clean.lower()
+    prefixes = ("/cd ", "cd ", "/c ", "c ", "/dir ", "/folder ")
+    path = None
+    if clean_lower.startswith(prefixes):
+        _, path = clean.split(" ", 1)
+    else:
+        match = re.match(r'^(?:cambiar\s+(?:de\s+)?(?:carpeta|directorio|proyecto)(?:\s+a)?|carpeta|directorio)\s+(.+)$', clean, re.IGNORECASE)
+        if match:
+            candidate = match.group(1).strip()
+            if os.path.exists(candidate.strip("\"' ")):
+                path = candidate
+
+    if path is not None:
+        ok, msg = launcher.set_working_directory(path)
+        if ok:
+            launcher.record_system_action(clean, f"Carpeta cambiada a {launcher.working_directory}")
+            console.print(f"[bold green]📁 Carpeta cambiada a:[/bold green] {launcher.working_directory}")
+            sound_effects.play_success()
+        else:
+            console.print(f"[bold red]❌ Error:[/bold red] {msg}")
+            sound_effects.play_error()
+        return True, ok
+    return False, False
+
 def process_instruction(prompt: str, launcher: AgyLauncher, system_controller: SystemController) -> bool:
-    handled, message, should_exit = system_controller.handle_command(prompt)
+    if try_handle_session_reset(prompt, launcher):
+        return True
+
+    handled_dir, _ = try_handle_directory_change(prompt, launcher)
+    if handled_dir:
+        return True
+
+    handled, message, should_exit, speak_response = system_controller.handle_command(prompt)
     if should_exit:
         console.print(f"\n[bold red]🛑 {message}[/bold red]")
-        if getattr(config, "TTS_ENABLED", True):
+        if getattr(config, "TTS_ENABLED", True) and speak_response:
             launcher.speaker.speak(message)
         return False
 
     if handled:
+        launcher.record_system_action(prompt, message)
         panel = Panel(
             Markdown(message),
             title="[bold green]⚡ Acción del Sistema[/bold green]",
@@ -91,7 +152,7 @@ def process_instruction(prompt: str, launcher: AgyLauncher, system_controller: S
         )
         console.print(panel)
         sound_effects.play_success()
-        if getattr(config, "TTS_ENABLED", True):
+        if getattr(config, "TTS_ENABLED", True) and speak_response:
             launcher.speaker.speak(message)
         return True
 
@@ -105,7 +166,7 @@ def handle_text_mode(launcher: AgyLauncher, audio_engine: AudioEngine, system_co
     """
     audio_engine.pause()
     console.print("\n[bold cyan]⌨️ Modo Escritura activado.[/bold cyan]")
-    console.print("[dim]Escribe tu orden para Antigravity, o '/cd <ruta>' para cambiar de proyecto (Enter vacío para cancelar):[/dim]")
+    console.print("[dim]Escribe tu orden para Antigravity, '/cd <ruta>' para cambiar de proyecto, o '/new' para reiniciar memoria (Enter vacío para cancelar):[/dim]")
 
     try:
         user_input = input("👉 ").strip()
@@ -114,16 +175,8 @@ def handle_text_mode(launcher: AgyLauncher, audio_engine: AudioEngine, system_co
 
     continue_running = True
     if user_input:
-        if user_input.lower().startswith(("/cd ", "cd ", "/dir ", "/folder ")):
-            _, path = user_input.split(" ", 1)
-            ok, msg = launcher.set_working_directory(path)
-            if ok:
-                console.print(f"[bold green]📁 Carpeta cambiada a:[/bold green] {launcher.working_directory}")
-                launcher.speaker.speak(f"Carpeta cambiada a {os.path.basename(launcher.working_directory)}")
-            else:
-                console.print(f"[bold red]❌ Error:[/bold red] {msg}")
-                sound_effects.play_error()
-        else:
+        handled_dir, _ = try_handle_directory_change(user_input, launcher)
+        if not handled_dir:
             continue_running = process_instruction(user_input, launcher, system_controller)
 
     audio_engine.start()
@@ -177,7 +230,9 @@ def main():
 
                     if is_valid:
                         console.print(f"[bold green]📝 Instrucción:[/bold green] \"{clean_prompt}\"")
+                        audio_engine.pause()
                         keep_going = process_instruction(clean_prompt, launcher, system_controller)
+                        audio_engine.start()
                         if not keep_going:
                             break
                     else:

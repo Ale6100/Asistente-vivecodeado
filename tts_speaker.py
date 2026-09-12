@@ -46,10 +46,6 @@ def clean_markdown_for_speech(text: str) -> str:
     # Limpiar espacios múltiples
     cleaned = re.sub(r'\s+', ' ', cleaned).strip()
 
-    # Limitar longitud para evitar discursos excesivamente largos por voz
-    if len(cleaned) > 500:
-        cleaned = cleaned[:480].rsplit('.', 1)[0] + ". Te dejé los detalles completos en la consola."
-
     return cleaned
 
 class TTSSpeaker:

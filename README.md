@@ -14,7 +14,7 @@ El sistema implementa un patrón **Hybrid Dual-Track Dispatcher** que separa las
 flowchart TD
     A["Micrófono / Entrada de Audio"] --> B["AudioEngine (PortAudio + Resampling 16 kHz)"]
     B --> C{"Detección de Entrada"}
-    C -->|"Palabra clave ('Hey Jarvis')"| D["Grabación con Detección de Silencio (2.2s)"]
+    C -->|"Palabra clave ('Alexa' / 'Hey Jarvis')"| D["Grabación con Detección de Silencio (2.2s)"]
     C -->|"Atajo de Teclado (F8)"| D
     C -->|"Modo Teclado ([Enter] / [T])"| E["Entrada por Consola"]
 
@@ -37,7 +37,7 @@ flowchart TD
     
     K -->|"NO (Tarea de Desarrollo / IA)"| M["AgyLauncher (cli_launcher.py)"]
     M --> N["Inyección de Contexto Silencioso de Carpeta"]
-    N --> O["Ejecución Subproceso: agy -c -p"]
+    N --> O["Aislamiento de Sesión: agy --project asistente-voz"]
     
     L --> P["Feedback Acústico (sound_effects.py)"]
     O --> P
@@ -55,23 +55,30 @@ flowchart TD
   * El entorno virtual (`venv`) y todas sus dependencias se configuran automáticamente sin requerir ajustes manuales en el sistema.
   * Los modelos de IA (Faster-Whisper y openWakeWord) se descargan e inicializan de forma transparente en su primera ejecución.
 * **Modo Híbrido (Voz + Teclado en la Misma Terminal):**
-  * **Voz Manos Libres:** Actívalo diciendo *"Hey Jarvis"* o presionando la tecla de atajo **`F8`**.
+  * **Voz Manos Libres:** Actívalo diciendo la palabra de activación configurada (*"Alexa"* por defecto, o *"Hey Jarvis"*) o presionando la tecla de atajo **`F8`**.
   * **Modo Escritura Inmediato:** Pulsa **`[Enter]`** o la tecla **`[T]`** en la consola: el micrófono se pausa temporalmente para permitir tipear o pegar comandos extensos sin interferencias acústicas.
 * **Control de Repositorio y Carpeta de Trabajo Activa:**
   * El asistente mantiene noción exacta de en qué carpeta debe operar.
   * Cambia de proyecto en cualquier instante desde el modo teclado escribiendo:
-    * `/cd C:\ruta\a\tu\proyecto` (o comandos estándar como `cd ..`, `/folder <ruta>`).
+    * `/c C:\ruta\a\tu\proyecto` o `/cd C:\ruta\a\tu\proyecto` (también alias como `cd ..`, `/folder <ruta>`), o por voz (*"cambiar carpeta a..."*).
   * Todas las acciones de código, consultas de archivos y comandos de terminal de Antigravity se ejecutarán dentro de esa carpeta.
-* **Arquitectura Híbrida de Doble Vía (Fast-Path Nativo + Deep AI):**
-  * **Vía Rápida Local (<50 ms):** Reconoce de forma instantánea acciones sobre el sistema operativo (control de volumen, silenciar, capturas de pantalla, minimizar ventanas, atajos de barra de tareas, temporizadores, cronómetro, fecha/hora, modo discreto y búsquedas directas en YouTube, Netflix, Google, Mercado Libre, etc.) ejecutándolas inmediatamente sin requerir llamadas lentas ni gastar tokens de red.
-  * **Vía Inteligente (Antigravity CLI):** Cualquier consulta de desarrollo de software, análisis de código, control de versiones Git, refactorizaciones o preguntas de programación complejas es delegada a la IA con contexto completo de archivos y herramientas de terminal.
-* **Respuesta por Voz Ágil y Natural (TTS):**
-  * Voz neuronal en español (`es-ES-AlvaroNeural`) con velocidad ajustada al **+25%** para una respuesta dinámica y natural.
+* **Gestión Inteligente de Memoria y Aislamiento de Sesión:**
+  * **Memoria por Sesión Efímera (`SESSION_MEMORY_MODE = "per_session"`):** Cada vez que se abre el asistente, arranca con una conversación limpia de cero, eliminando latencia acumulada y previniendo la contaminación de contexto o saturación de tokens. Dentro de una misma sesión mantiene el hilo conversacional continuo.
+  * **Aislamiento de Proyecto (`AGY_PROJECT_ID = "asistente-voz"`):** Todas las consultas a la IA se canalizan bajo un identificador de proyecto exclusivo (`--project`), garantizando que el asistente nunca mezcle su contexto ni colisione con sesiones interactivas manuales de Antigravity CLI abiertas en otras terminales.
+  * **Sincronización Unificada de Actividad (Blackboard / Shared Context Buffer):** Las acciones ejecutadas por la vía rápida del sistema (capturas de pantalla con su ruta de guardado, ajustes de volumen, cambio de carpeta de trabajo o búsquedas) se registran en un buffer cronológico en memoria. Al consultar a la IA, este historial reciente se inyecta automáticamente en su contexto silencioso, permitiéndole saber qué se hizo en la máquina (*"¿dónde se guardó la captura?"*, *"¿qué fue lo último que te pedí?"*).
+  * **Reseteo en Caliente:** Permite limpiar la memoria en cualquier momento sin reiniciar la app, ya sea por voz (*"nueva sesión"*, *"olvidá lo anterior"*, *"reiniciar memoria"*) o por teclado (`/new`, `/reset`, `/clear`). Al cambiar de carpeta con `/cd`, la memoria se renueva automáticamente.
+* **Arquitectura Híbrida de Doble Vía con Despachador de Acciones:**
+  * **Vía Rápida Local (<50 ms):** Reconoce de forma instantánea acciones mecánicas deterministas sobre el sistema operativo (control de volumen, silenciar, capturas de pantalla, minimizar ventanas, atajos de barra de tareas, temporizadores, cronómetro, fecha/hora, modo discreto y búsquedas directas). Incluye soporte de **repetición contextual inmediata** (*"otra"*, *"sacá otra"*, *"hacé otra"*, *"otra captura"*) para repetir la última acción sin latencia. Los patrones están rigurosamente anclados al inicio de la orden imperativa e incorporan filtro de cláusulas explicativas (*"noto que..."*, *"cuando te pido..."*, *"por ejemplo..."*), evitando falsos positivos cuando el usuario reflexiona o conversa.
+  * **Vía Inteligente (Antigravity CLI + Action Dispatcher):** Las consultas con criterios semánticos, comparativos o superlativos (*"el video más visto de..."*, *"el mejor tutorial..."*, análisis de código, control de versiones Git, etc.) son derivadas a la IA con timeout extendido (`AGY_PRINT_TIMEOUT = "20m"`). Tras razonar e investigar, la IA puede emitir directivas de escritorio (`[ACTION: OPEN_URL <url>]`, `[ACTION: OPEN_APP <app>]`, `[ACTION: SCREENSHOT]`) que el proceso local ejecuta inmediatamente en la sesión interactiva del usuario mediante `open_url_native` o APIs nativas, garantizando que los enlaces exactos y acciones se reflejen con foco en su pantalla física real.
+* **Respuesta por Voz Selectiva y Completa (TTS):**
+  * **Vocalización Completa para Respuestas Relevantes:** Para preguntas, explicaciones de código, razonamiento y consultas informativas, el sintetizador pronuncia la respuesta completa de manera natural, sin cortes artificiales ni frases de truncamiento.
+  * **Silencio en Acciones Mecánicas:** Para tareas de ejecución directa (búsquedas en Disney Plus, YouTube o Google, apertura de aplicaciones, cambios de volumen, capturas de pantalla, atajos o minimizado de ventanas), el asistente no emite parloteo innecesario por los altavoces; confirma la acción de forma no invasiva mediante el panel en consola y el sonido acústico (chime).
+  * Voz neuronal en español (`es-ES-AlvaroNeural`) con velocidad ajustada al **+25%** para una dicción ágil y natural.
   * Filtro automático de Markdown que limpia bloques de código y enlaces para evitar lecturas tediosas al oído.
   * Fallback nativo: si no hay conexión a internet para el servicio neuronal, conmuta automáticamente al sintetizador local de Windows (SAPI5).
 * **Transcripción Robusta con Filtro de Titubeos:**
   * Motor **Faster-Whisper** (`small` con cómputo int8) de alta precisión en español sobre CPU.
-  * Módulo de validación que elimina muletillas iniciales (*eh*, *este*, *bueno*), corrige errores fonéticos (*"hola mundos"* ➜ *"hola mundo"*) y descarta titubeos o cancelaciones voluntarias (*"no nada"*, *"cancela"*).
+  * Módulo de validación que elimina muletillas iniciales (*eh*, *este*, *bueno*), corrige errores fonéticos (*"hola mundos"* ➜ *"hola mundo"*, *"mi dudev"* ➜ *"midudev"*) y descarta titubeos o cancelaciones voluntarias (*"no nada"*, *"cancela"*).
   * Tolerancia a pausas naturales (2.2 segundos de silencio antes de cerrar la grabación), permitiendo pensar mientras se habla.
 * **Detección Automática y Calibración de Micrófono:**
   * Escanea y selecciona automáticamente la mejor interfaz de audio disponible (probando WASAPI, DirectSound y WDM-KS para evitar incompatibilidades de host MME en Windows).
@@ -86,8 +93,8 @@ flowchart TD
 * **`main.py`**: Punto de entrada del programa. Administra el bucle principal de eventos, el escucha global de teclado (`pynput`), la captura de pulsaciones no bloqueantes en Windows (`msvcrt`), la orquestación del Fast-Path y el renderizado de la interfaz en terminal con `rich`.
 * **`audio_engine.py`**: Motor de captura de audio con PortAudio (`sounddevice`). Realiza auto-detección de micrófono, remuestreo dinámico a 16 kHz vía `scipy.signal`, calibración de ruido ambiental y detección de palabra de activación con `openwakeword`.
 * **`transcriber.py`**: Transcripción de voz a texto con `faster-whisper`. Implementa limpieza de patrones léxicos, descarte de muletillas, corrección fonética y validación de órdenes.
-* **`cli_launcher.py`**: Integración con el ejecutable `agy`. Inyecta directivas de contexto silenciosas, ejecuta el subproceso en la carpeta de trabajo activa y coordina la síntesis de audio de la respuesta.
-* **`system_controller.py`**: Controlador nativo del sistema operativo (Fast-Path). Ejecuta instantáneamente (<50 ms) acciones de Windows (volumen, ventanas, capturas de pantalla, temporizadores, cronómetro, fecha/hora, búsquedas web rápidas y apertura de aplicaciones) sin incurrir en latencia de red ni llamadas a la IA.
+* **`cli_launcher.py`**: Integración con el ejecutable `agy`. Inyecta directivas de contexto silenciosas, ejecuta el subproceso en la carpeta de trabajo activa, procesa directivas de apertura en el escritorio interactivo (`[ACTION: OPEN_URL/OPEN_APP]`) y coordina la síntesis de audio de la respuesta limpia.
+* **`system_controller.py`**: Controlador nativo del sistema operativo (Fast-Path). Ejecuta instantáneamente (<50 ms) acciones mecánicas de Windows, discriminando consultas literales de aquellas que requieren razonamiento semántico para delegarlas a la IA.
 * **`tts_speaker.py`**: Módulo de síntesis de voz (Text-to-Speech) con `edge-tts`, reproducción de audio con `pygame.mixer` y fallback offline a Windows SAPI5 (`System.Speech`).
 * **`sound_effects.py`**: Señalización acústica no bloqueante con `winsound.Beep`.
 * **`config.py`**: Parámetros globales y ajustables del sistema (palabras clave, atajos, modelos, voz, velocidad, silencios).
@@ -173,13 +180,15 @@ Una vez abierto el asistente, puedes interactuar tanto por voz como por teclado:
 
 | Categoría | Ejemplo por Voz o Texto | Acción Ejecutada |
 | :--- | :--- | :--- |
-| **Voz Manos Libres** | *"Hey Jarvis, qué cambios hay en este git?"* | Graba con detección automática de silencio y ejecuta con IA. |
+| **Voz Manos Libres** | *"Alexa, qué cambios hay en este git?"* | Graba con detección automática de silencio y ejecuta con IA. |
 | **Atajo Push-to-Talk** | Presionar **`F8`** y hablar | Inicia o detiene la grabación manualmente con una sola tecla. |
 | **Modo Teclado** | Pulsar **`[Enter]`** o **`[T]`** | Pausa el micrófono para tipear instrucciones o pegar rutas largas. |
-| **Cambiar Repositorio** | `/cd C:\ruta\a\tu\proyecto` | Redirige la carpeta activa donde opera Antigravity CLI. |
-| **Búsqueda Web Rápida** | *"Abrí Netflix y buscá El diablo viste a la moda"* | Abre la búsqueda en el navegador predeterminado en <50 ms. |
-| **Búsqueda en Sitios** | *"Buscar trailer de Matrix en YouTube"* | Abre la búsqueda directa en YouTube, Google, GitHub, etc. |
+| **Cambiar Repositorio** | `/c <ruta>`, `/cd <ruta>` o por voz | Redirige la carpeta activa donde opera Antigravity CLI (renueva memoria). |
+| **Reiniciar Memoria** | *"Nueva sesión"* / *"Olvidá lo anterior"* / `/new` | Resetea la memoria conversacional en caliente sin cerrar la app. |
+| **Búsqueda Web Rápida** | *"Abrí Netflix y buscá El diablo viste a la moda"* / *"Busca Avengers en Disney Plus"* | Abre la búsqueda en el navegador predeterminado en <50 ms sin parloteo de voz. |
+| **Búsqueda en Sitios y Videos** | *"Busca trailer de Matrix en YouTube"* / *"Busca en YouTube el trailer de Matrix"* / *"Buscame el video de Midudev"* | Abre la búsqueda directa en YouTube, Google, Disney Plus, GitHub, etc. en <50 ms. |
 | **Captura de Pantalla** | *"Sacá una captura de pantalla"* | Captura el escritorio y lo guarda en `screenshots/captura_*.png`. |
+| **Repetición Contextual** | *"Otra"* / *"Sacá otra"* / *"Hacé otra"* / *"Otra más"* | Repite de inmediato la última acción mecánica ejecutada (ej. captura o volumen). |
 | **Control de Volumen** | *"Subí el volumen"* / *"Volumen al 30"* / *"Mute"* | Ajusta o silencia el mezclador de sonido de Windows. |
 | **Control de Ventanas** | *"Minimizar todo"* / *"Cerrar ventana"* | Minimiza el escritorio (`Win+D`) o cierra la app activa (`Alt+F4`). |
 | **Atajo de Barra de Tareas** | *"Atajo 1"* (hasta *"Atajo 9"*) | Lanza el programa fijado en la posición N de la barra de tareas. |
@@ -198,7 +207,7 @@ Todos los parámetros del sistema se centralizan en [`config.py`](config.py):
 
 | Variable | Valor por Defecto | Descripción |
 | :--- | :--- | :--- |
-| `WAKE_WORDS` | `["hey_jarvis"]` | Lista de palabras de activación reconocidas por openWakeWord. |
+| `WAKE_WORDS` | `["alexa"]` | Lista de palabras de activación reconocidas por openWakeWord. |
 | `WAKE_WORD_THRESHOLD` | `0.5` | Umbral de sensibilidad para la detección de la palabra clave. |
 | `HOTKEY_PUSH_TO_TALK` | `"f8"` | Tecla global para alternar la grabación (`"f8"`, `"f9"`, `"<ctrl>+<space>"`). |
 | `SAMPLE_RATE` | `16000` | Frecuencia de muestreo estándar requerida por Whisper y openWakeWord. |
@@ -214,3 +223,6 @@ Todos los parámetros del sistema se centralizan en [`config.py`](config.py):
 | `TTS_RATE` | `"+25%"` | Ajuste porcentual de la velocidad del habla para mayor agilidad. |
 | `SOUND_FEEDBACK_ENABLED`| `True` | Emisión de beeps acústicos no bloqueantes para confirmar estados. |
 | `DEFAULT_PROJECT_DIR` | `None` | Carpeta de trabajo inicial fija (`None` adopta el directorio de ejecución). |
+| `SESSION_MEMORY_MODE` | `"per_session"` | Modo de memoria: `"per_session"` (limpia al abrir), `"persistent"` o `"stateless"`. |
+| `AGY_PROJECT_ID` | `"asistente-voz"` | Identificador de proyecto exclusivo para aislar el asistente de otras consolas. |
+| `AGY_PRINT_TIMEOUT` | `"20m"` | Límite de espera de ejecución para tareas complejas de desarrollo en Antigravity CLI. |

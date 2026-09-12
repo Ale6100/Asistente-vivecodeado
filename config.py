@@ -5,7 +5,7 @@ Configuración del Asistente por Voz para Antigravity CLI (agy)
 # ==========================================
 # 1. PALABRA DE ACTIVACIÓN (WAKE WORD)
 # ==========================================
-WAKE_WORDS = ["hey_jarvis"]
+WAKE_WORDS = ["alexa"]
 WAKE_WORD_THRESHOLD = 0.5
 
 # ==========================================
@@ -37,12 +37,16 @@ WHISPER_PROMPT_BIAS = (
     "Transcripción limpia en español de instrucciones de desarrollo para Antigravity CLI: "
     "Hola mundo, crear función, git status, git commit, refactorizar código, "
     "corregir bug, crear componente, endpoint de API, ejecutar servidor, "
-    "instalar paquete, python, javascript, typescript, docker, terminal, archivo."
+    "instalar paquete, python, javascript, typescript, docker, terminal, archivo, "
+    "Midudev, YouTube, Netflix, Google, Spotify, Mercado Libre."
 )
 
 # ==========================================
 # 5. INTEGRACIÓN CON ANTIGRAVITY CLI (AGY)
 # ==========================================
+SESSION_MEMORY_MODE = "per_session"
+AGY_PROJECT_ID = "asistente-voz"
+AGY_PRINT_TIMEOUT = "20m"
 CONTINUE_PREVIOUS_CONVERSATION = True
 AGY_COMMAND = "agy"
 DEFAULT_PROJECT_DIR = None
@@ -50,7 +54,7 @@ DEFAULT_PROJECT_DIR = None
 # ==========================================
 # 6. RESPUESTA POR VOZ (TEXT-TO-SPEECH - TTS)
 # ==========================================
-TTS_ENABLED = False
+TTS_ENABLED = True
 TTS_VOICE = "es-ES-AlvaroNeural"
 TTS_RATE = "+25%"
 

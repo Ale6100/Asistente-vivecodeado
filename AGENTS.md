@@ -59,6 +59,15 @@ Siempre que se solicite una acción o tarea para la cual no exista un comando di
 - **Utilidad real y eliminación de redundancias**: No mantener archivos intermedios o en desuso. Todo archivo que resida en el proyecto o en `tools/` debe tener una función activa y justificada. Si una tarea genera un binario ejecutable que es el único consumido en ejecución, se debe evitar dejar archivos de código intermedios en desuso que confundan o generen redundancia, a menos que exista una necesidad explícita de compilación dinámica.
 - **Transparencia y prolijidad**: Explicar con naturalidad y claridad al usuario qué mecanismo se diseñó para resolver el problema, manteniendo el entorno de trabajo limpio y ordenado.
 
+## Limpieza estricta de archivos y recursos temporales
+
+Cualquier recurso, archivo o artefacto transitorio generado para resolver una consulta, análisis, prueba o tarea operativa —incluyendo, pero no limitándose a: capturas de pantalla para inspección visual, scripts efímeros de prueba, volcados de memoria, archivos scratch, imágenes intermedias o registros temporales— debe ser **eliminado de inmediato** una vez cumplido su propósito.
+
+- **Cero basura residual**: Bajo ninguna circunstancia deben quedar archivos transitorios o capturas obsoletas en la carpeta `screenshots/`, en `tools/`, en la raíz del proyecto ni en ubicaciones temporales del sistema una vez finalizada la acción.
+- **Ciclo de vida efímero garantizado**: Si un archivo se crea exclusivamente como apoyo transitorio (por ejemplo, para que la IA inspeccione la pantalla, valide una salida o corra un test puntual), su ciclo de vida concluye en la misma iteración: se procesa/analiza y se purga del disco antes de emitir la respuesta final.
+- **Diferenciación estricta entre permanente y transitorio**: Solo persisten en el repositorio aquellos archivos de código, utilidades activas en `tools/` o documentación que formen parte deliberada y duradera de la arquitectura del proyecto. Todo lo demás es efímero y se elimina automáticamente sin requerir recordatorio del usuario.
+
+
 ## Portabilidad absoluta y compatibilidad universal (Windows 10 y 11)
 
 El asistente y todas las herramientas complementarias que se desarrollen deben ser **100% portables** y operar de forma transparente en cualquier equipo con Windows 10 o Windows 11 sin requerir modificaciones ni configuraciones manuales:

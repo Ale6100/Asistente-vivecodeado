@@ -98,6 +98,7 @@ class AgyLauncher:
             "2. Para preguntas, explicaciones, conceptos técnicos, dudas o cuando el usuario pida explicaciones: responde con claridad y de forma completa. Tu respuesta será leída por voz en su totalidad. "
             "3. Para desarrollo: ejecuta las acciones reales (crear/editar archivos, git, comandos) en la carpeta de trabajo y resume el resultado de forma clara. "
             "4. No incluyas bloques de código markdown en el texto conversacional para que la síntesis de voz sea fluida y natural al oído. "
+            "5. Limpieza estricta de temporales: cualquier archivo, captura de pantalla, script o recurso efímero creado para resolver una consulta o análisis debe ser eliminado inmediatamente al terminar su uso, sin dejar basura residual en el disco. "
             "\n\nInstrucción del usuario:\n"
         )
 

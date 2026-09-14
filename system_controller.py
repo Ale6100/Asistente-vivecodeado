@@ -80,6 +80,7 @@ QUICK_APPS = {
     "notepad": "notepad",
     "terminal": "powershell",
     "explorador": "explorer",
+    "discord": r'explorer "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Discord.lnk"',
 }
 
 SEARCH_VERBS_PATTERN = r'(?:buscar|buscame|búscame|buscá|busca|busque|búsqueme|googlear|googleá|googlea)'

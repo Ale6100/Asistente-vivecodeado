@@ -135,9 +135,11 @@ flowchart TD
 3. **¿Qué realiza automáticamente este script?**
    * Detecta la instalación de Python disponible en Windows (`py -3` o `python`).
    * Crea un entorno virtual aislado en la carpeta `venv` (sin alterar librerías globales del sistema).
-   * Actualiza `pip` e instala todas las dependencias listadas en `requirements.txt`.
-   * En el primer arranque, descarga los modelos de IA necesarios (Faster-Whisper `small` ~460 MB y openWakeWord). *Esta descarga inicial toma entre 1 y 2 minutos dependiendo de la conexión a internet.*
-   * Calibra el micrófono seleccionado e inicia la interfaz de control.
+   * Instala las dependencias desde `requirements.txt` (~400 MB en paquetes compilados) y genera un marcador centinela (`venv\.installed`) al completar con éxito.
+   * En el primer arranque, descarga los modelos de IA necesarios (Faster-Whisper `small` ~460 MB desde HuggingFace y modelos openWakeWord).
+   * **Duración y volumen inicial:** La primera puesta en marcha descarga aproximadamente **~900 MB a 1 GB** en total entre librerías y modelos neuronales, lo que toma habitualmente entre 3 y 10 minutos según la velocidad de conexión.
+   * **Ejecución continua:** `iniciar_asistente.bat` no es un instalador que se cierra al terminar; una vez calibrado el micrófono, el asistente queda **activo y en ejecución permanente** escuchando órdenes por voz o teclado (`while True:`).
+   * Para forzar una reinstalación limpia si hubo un corte de energía o error en el disco, se puede ejecutar `iniciar_asistente.bat --clean` o borrar manualmente la carpeta `venv`.
 
 ---
 
@@ -171,6 +173,10 @@ Todos los errores y advertencias se muestran directamente en la ventana de la co
 
 * **Ventana Persistente ante Errores:**
   * El archivo `iniciar_asistente.bat` finaliza con la directiva `pause`. Si ocurre un fallo en Python o en la instalación, la ventana no se cierra abruptamente, permitiendo leer la traza completa (*traceback*) y diagnosticar el problema.
+* **Instalación interrumpida o entorno corrupto:**
+  * Si la consola se cerró forzadamente mientras descargaba paquetes, el script detecta la ausencia del centinela `venv\.installed`, muestra una advertencia y reanuda automáticamente la instalación de las dependencias faltantes sin dejar el entorno a medio armar.
+* **Consola "congelada" por QuickEdit (Modo Selección en Windows):**
+  * Si haces clic con el cursor dentro de la ventana de CMD de Windows, el sistema entra en modo selección de texto (muestra *"Seleccionar"* en la barra de título) y suspende la ejecución de Python en segundo plano. Si parece detenido sin avanzar, pulsa **`Enter`** o **`Esc`** para reanudar el flujo.
 * **"No se encontró una instalación funcional de Python":**
   * Descarga e instala Python 3.10+ desde la web oficial. Si ya lo tienes instalado pero no lo reconoce, reinstálalo seleccionando la opción *"Modify"* y tildando *"Add Python to environment variables"*.
 * **Permisos del micrófono en Windows:**

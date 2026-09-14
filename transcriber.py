@@ -3,7 +3,7 @@ Módulo de Transcripción de Audio a Texto usando Faster-Whisper con Limpieza In
 """
 import re
 import numpy as np
-from faster_whisper import WhisperModel
+from faster_whisper import WhisperModel, download_model
 import config
 
 # Frases explícitas de cancelación
@@ -18,6 +18,11 @@ INITIAL_FILLERS = r'^(eh+|em+|este+|mmm+|o sea|a ver|bueno|o sea que|digamos)\b[
 class WhisperTranscriber:
     def __init__(self):
         print(f"📦 Inicializando Faster-Whisper ({config.WHISPER_MODEL_SIZE}) en {config.WHISPER_DEVICE}...")
+        try:
+            download_model(config.WHISPER_MODEL_SIZE, local_files_only=True)
+        except Exception:
+            print("   (Descargando modelo de HuggingFace por primera vez ~460 MB. Aguarda un momento...)")
+
         self.model = WhisperModel(
             config.WHISPER_MODEL_SIZE,
             device=config.WHISPER_DEVICE,

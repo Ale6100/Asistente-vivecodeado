@@ -9,7 +9,23 @@ echo   Iniciando Asistente de Voz para Antigravity CLI (agy)
 echo ========================================================
 cd /d "%~dp0"
 
-if exist "venv\Scripts\python.exe" goto :run_assistant
+if "%1"=="--clean" goto :clean_env
+if "%1"=="--reinstall" goto :clean_env
+goto :check_env
+
+:clean_env
+echo [*] Eliminando entorno virtual existente para reinstalacion limpia...
+if exist "venv" rmdir /s /q "venv"
+echo [*] Entorno previo eliminado.
+
+:check_env
+if exist "venv\Scripts\python.exe" if exist "venv\.installed" goto :run_assistant
+
+if exist "venv\Scripts\python.exe" (
+    echo [*] Se detecto un entorno previo incompleto o una instalacion interrumpida.
+    echo [*] Reanudando la instalacion y verificacion de dependencias...
+    goto :install_deps
+)
 
 echo [*] Configurando el entorno virtual por primera vez...
 
@@ -42,14 +58,35 @@ if not exist "venv\Scripts\python.exe" (
     exit /b 1
 )
 
-echo [*] Instalando dependencias del proyecto desde requirements.txt...
+:install_deps
+echo.
+echo ========================================================
+echo   Instalando dependencias desde requirements.txt
+echo   Descarga estimada: ~400 MB en librerias base.
+echo   Puede tardar varios minutos segun tu conexion.
+echo   Por favor no cierres la ventana ni hagas clic dentro.
+echo ========================================================
+echo.
+
 venv\Scripts\python.exe -m pip install --upgrade pip
 venv\Scripts\python.exe -m pip install -r requirements.txt
 if %errorlevel% neq 0 (
-    echo [ADVERTENCIA] Ocurrio un inconveniente al instalar algunas dependencias.
+    echo.
+    echo [ERROR] Ocurrio un fallo al instalar las dependencias.
+    echo Verifica tu conexion a internet o si el antivirus bloqueo la descarga.
+    echo Si el problema persiste, puedes borrar la carpeta "venv" y reintentar.
+    echo.
+    pause
+    exit /b 1
 )
 
+echo OK > "venv\.installed"
+echo.
+echo [OK] Todas las dependencias se instalaron y verificaron correctamente.
+echo.
+
 :run_assistant
+
 venv\Scripts\python.exe main.py
 if %errorlevel% neq 0 (
     echo.

@@ -55,18 +55,20 @@ def setup_hotkey_listener():
     except Exception:
         return None, hotkey
 
-def print_banner(formatted_hotkey: str, mic_name: str, working_dir: str):
+def print_banner(formatted_hotkey: str, mic_name: str, working_dir: str, model_name: str, reasoning_effort: str):
     wake_display = ", ".join([w.replace("_", " ").title() for w in config.WAKE_WORDS])
     tts_status = f"Activada ({config.TTS_RATE})" if getattr(config, "TTS_ENABLED", True) else "Desactivada"
     memory_mode = getattr(config, "SESSION_MEMORY_MODE", "per_session")
     memory_display = "Por Sesión (Limpia al iniciar)" if memory_mode == "per_session" else ("Persistente" if memory_mode == "persistent" else "Sin memoria")
 
     table = Table(show_header=False, box=None, padding=(0, 1))
+    table.add_row("🤖 [bold cyan]Modelo de lenguaje:[/bold cyan]", f"[bold magenta]{model_name}[/bold magenta]")
+    table.add_row("⚡ [bold cyan]Nivel de razonamiento:[/bold cyan]", f"[bold magenta]{reasoning_effort}[/bold magenta]")
+    table.add_row("📁 [bold cyan]Repositorio / Carpeta activa:[/bold cyan]", f"[bold yellow]{working_dir}[/bold yellow]")
+    table.add_row("🧠 [bold cyan]Memoria de conversación:[/bold cyan]", f"[bold green]{memory_display}[/bold green]")
     table.add_row("🗣️ [bold cyan]Palabra de activación:[/bold cyan]", f"[bold green]{wake_display}[/bold green]")
     table.add_row("⌨️ [bold cyan]Atajo de voz (Toggle):[/bold cyan]", f"[bold green]{formatted_hotkey}[/bold green]")
     table.add_row("📝 [bold cyan]Modo escritura por teclado:[/bold cyan]", "[bold yellow]Pulsa [Enter] o [T][/bold yellow]")
-    table.add_row("📁 [bold cyan]Repositorio / Carpeta activa:[/bold cyan]", f"[bold yellow]{working_dir}[/bold yellow]")
-    table.add_row("🧠 [bold cyan]Memoria de conversación:[/bold cyan]", f"[bold green]{memory_display}[/bold green]")
     table.add_row("🔊 [bold cyan]Respuesta por voz (TTS):[/bold cyan]", f"[bold green]{tts_status}[/bold green]")
     table.add_row("🎙️ [bold cyan]Micrófono:[/bold cyan]", f"[white]{mic_name}[/white]")
 
@@ -197,7 +199,8 @@ def main():
         console.print(f"[bold red]❌ Error al inicializar:[/bold red] {e}")
         return
 
-    print_banner(formatted_hotkey, audio_engine.device_name, launcher.working_directory)
+    model_name, reasoning_effort = launcher.get_model_info()
+    print_banner(formatted_hotkey, audio_engine.device_name, launcher.working_directory, model_name, reasoning_effort)
     wake_display = config.WAKE_WORDS[0].replace("_", " ").title()
     console.print(f"\n[bold green]🟢 Listo.[/bold green] Di '[bold cyan]{wake_display}[/bold cyan]', presiona '[bold cyan]{formatted_hotkey}[/bold cyan]', o pulsa '[bold cyan]Enter[/bold cyan]' para escribir.\n")
 

@@ -84,9 +84,7 @@ def find_best_microphone():
 
 class AudioEngine:
     def __init__(self):
-        print("🔍 Detectando micrófono en el sistema...")
         self.device_idx, self.native_sr, self.device_name = find_best_microphone()
-        print(f"🎙️ Micrófono seleccionado: [ID {self.device_idx}] {self.device_name} ({self.native_sr} Hz)")
 
         self.native_block_size = int(self.native_sr * 0.08)
         self.audio_queue = queue.Queue(maxsize=200)
@@ -94,7 +92,6 @@ class AudioEngine:
         self.is_running = False
         self.is_recording_instruction = False
 
-        print("🧠 Cargando modelo openWakeWord...")
         try:
             self.wakeword_model = Model(
                 wakeword_models=list(config.WAKE_WORDS),
@@ -102,13 +99,11 @@ class AudioEngine:
             )
         except Exception:
             import openwakeword.utils
-            print("📥 Descargando modelos de activación necesarios...")
             openwakeword.utils.download_models(list(config.WAKE_WORDS))
             self.wakeword_model = Model(
                 wakeword_models=list(config.WAKE_WORDS),
                 inference_framework="onnx"
             )
-        print(f"✅ Palabra(s) de activación listas.")
 
         self._create_stream()
 

@@ -52,7 +52,6 @@ AGY_COMMAND = "agy"
 DEFAULT_PROJECT_DIR = None
 AGY_MODEL = None
 AGY_REASONING_EFFORT = None
-DYNAMIC_REASONING_EFFORT = True
 
 # ==========================================
 # 6. RESPUESTA POR VOZ (TEXT-TO-SPEECH - TTS)

@@ -186,15 +186,19 @@ def handle_text_mode(launcher: AgyLauncher, audio_engine: AudioEngine, system_co
     return continue_running
 
 def main():
-    console.print("[bold yellow]Iniciando Antigravity Voice Assistant...[/bold yellow]\n")
-
     hotkey_listener, formatted_hotkey = setup_hotkey_listener()
 
     try:
-        audio_engine = AudioEngine()
-        transcriber = WhisperTranscriber()
-        launcher = AgyLauncher()
-        system_controller = SystemController(speaker=launcher.speaker)
+        with console.status("[bold cyan]Iniciando servicios del asistente...", spinner="dots") as status:
+            status.update("[bold cyan]Inicializando motor de audio y micrófono...")
+            audio_engine = AudioEngine()
+
+            status.update("[bold cyan]Cargando modelo de transcripción Whisper...")
+            transcriber = WhisperTranscriber()
+
+            status.update("[bold cyan]Conectando con Antigravity y entorno...")
+            launcher = AgyLauncher()
+            system_controller = SystemController(speaker=launcher.speaker)
     except Exception as e:
         console.print(f"[bold red]❌ Error al inicializar:[/bold red] {e}")
         return

@@ -17,18 +17,16 @@ INITIAL_FILLERS = r'^(eh+|em+|este+|mmm+|o sea|a ver|bueno|o sea que|digamos)\b[
 
 class WhisperTranscriber:
     def __init__(self):
-        print(f"📦 Inicializando Faster-Whisper ({config.WHISPER_MODEL_SIZE}) en {config.WHISPER_DEVICE}...")
         try:
             download_model(config.WHISPER_MODEL_SIZE, local_files_only=True)
         except Exception:
-            print("   (Descargando modelo de HuggingFace por primera vez ~460 MB. Aguarda un momento...)")
+            pass
 
         self.model = WhisperModel(
             config.WHISPER_MODEL_SIZE,
             device=config.WHISPER_DEVICE,
             compute_type=config.WHISPER_COMPUTE_TYPE
         )
-        print(f"✅ Modelo Faster-Whisper ({config.WHISPER_MODEL_SIZE}) cargado correctamente.")
 
     def transcribe(self, audio_data: np.ndarray) -> str:
         """

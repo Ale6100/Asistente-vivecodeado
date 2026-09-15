@@ -5,7 +5,6 @@ import shutil
 import subprocess
 import webbrowser
 import json
-import unicodedata
 from datetime import datetime
 from rich.console import Console
 from rich.panel import Panel
@@ -31,8 +30,6 @@ class AgyLauncher:
         self.has_active_conversation = False
         self.action_history = []
         self.assistant_root_dir = os.path.dirname(os.path.abspath(__file__))
-        self._model_catalog = None
-        self._model_capabilities_cache = None
 
         if config.DEFAULT_PROJECT_DIR and os.path.isdir(config.DEFAULT_PROJECT_DIR):
             self.working_directory = os.path.abspath(config.DEFAULT_PROJECT_DIR)
@@ -66,192 +63,48 @@ class AgyLauncher:
             return True, self.working_directory
         return False, f"La ruta '{clean_path}' no existe o no es una carpeta válida."
 
-    def _fetch_model_catalog(self) -> dict:
-        if self._model_catalog is not None:
-            return self._model_catalog
-
-        catalog = {}
-        if not shutil.which(self.agy_cmd):
-            self._model_catalog = catalog
-            return catalog
-
-        try:
-            proc = subprocess.run(
-                [self.agy_cmd, "models"],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=5
-            )
-            if proc.returncode == 0:
-                for line in proc.stdout.splitlines():
-                    clean_line = line.strip()
-                    if not clean_line or clean_line.startswith("Fetching") or clean_line.startswith("Usage"):
-                        continue
-                    parts = clean_line.split("\t")
-                    model_id = parts[0].strip()
-                    display_name = parts[1].strip() if len(parts) > 1 else model_id
-
-                    match = re.match(r'^(.*?)\s*\(([^)]+)\)$', display_name)
-                    if match:
-                        base_name = match.group(1).strip()
-                        effort_label = match.group(2).strip()
-                    else:
-                        base_name = display_name
-                        effort_label = None
-
-                    norm_base = base_name.lower()
-                    if norm_base not in catalog:
-                        catalog[norm_base] = {
-                            "base_name": base_name,
-                            "ids": [],
-                            "efforts": []
-                        }
-                    catalog[norm_base]["ids"].append(model_id)
-                    if effort_label and effort_label.lower() not in [e.lower() for e in catalog[norm_base]["efforts"]]:
-                        catalog[norm_base]["efforts"].append(effort_label)
-        except Exception:
-            pass
-
-        self._model_catalog = catalog
-        return catalog
-
-    def get_model_capabilities(self) -> dict:
-        if self._model_capabilities_cache is not None:
-            return self._model_capabilities_cache
-
+    def get_model_info(self) -> tuple[str, str]:
         configured_model = getattr(config, "AGY_MODEL", None)
         configured_effort = getattr(config, "AGY_REASONING_EFFORT", None)
-        dynamic_effort_enabled = getattr(config, "DYNAMIC_REASONING_EFFORT", True)
 
-        raw_model_name = None
-        if configured_model:
-            raw_model_name = str(configured_model).strip()
-        else:
+        raw_model = configured_model
+        if not raw_model:
             settings_path = os.path.join(os.path.expanduser("~"), ".gemini", "antigravity-cli", "settings.json")
             if os.path.isfile(settings_path):
                 try:
-                    with open(settings_path, "r", encoding="utf-8") as settings_file:
-                        settings_data = json.load(settings_file)
-                        raw_model_name = settings_data.get("model")
+                    with open(settings_path, "r", encoding="utf-8") as f:
+                        settings_data = json.load(f)
+                        raw_model = settings_data.get("model")
                 except Exception:
-                    raw_model_name = None
+                    raw_model = None
 
-        if not raw_model_name:
-            result = {
-                "base_name": "Predeterminado de Antigravity",
-                "min_effort": None,
-                "max_effort": None,
-                "supports_dynamic_effort": False,
-                "display_effort": "Predeterminado"
-            }
-            self._model_capabilities_cache = result
-            return result
+        if not raw_model:
+            raw_model = "Predeterminado de Antigravity"
 
-        parenthesis_match = re.match(r'^(.*?)\s*\(([^)]+)\)$', raw_model_name)
-        candidate_name = parenthesis_match.group(1).strip() if parenthesis_match else raw_model_name.strip()
-        norm_candidate = candidate_name.lower()
+        model_name = str(raw_model).strip()
+        effort_label = None
 
-        catalog = self._fetch_model_catalog()
-        matched_entry = None
-        for entry in catalog.values():
-            if entry["base_name"].lower() == norm_candidate:
-                matched_entry = entry
-                break
-            if any(mid.lower() == raw_model_name.lower() or mid.lower() == norm_candidate for mid in entry["ids"]):
-                matched_entry = entry
-                break
+        match = re.match(r'^(.*?)\s*\(([^)]+)\)$', model_name)
+        if match:
+            model_name = match.group(1).strip()
+            effort_label = match.group(2).strip()
 
-        base_name = matched_entry["base_name"] if matched_entry else candidate_name
-        available_efforts = matched_entry["efforts"] if matched_entry else []
-
-        effort_rank = {"low": 10, "medium": 20, "high": 30, "thinking": 40}
-        sorted_efforts = sorted(available_efforts, key=lambda x: effort_rank.get(x.lower(), 50))
-        cli_effort_map = {"low": "low", "medium": "medium", "high": "high"}
-        tunable_efforts = [e.lower() for e in sorted_efforts if e.lower() in cli_effort_map]
-
-        has_dynamic_capability = len(tunable_efforts) >= 2 and dynamic_effort_enabled and not configured_effort
+        if configured_effort:
+            effort_label = str(configured_effort).strip()
 
         effort_display_map = {
             "high": "Alto (High)",
             "medium": "Medio (Medium)",
             "low": "Bajo (Low)",
             "thinking": "Pensamiento (Thinking)",
-            "predeterminado": "Predeterminado"
         }
 
-        if configured_effort:
-            display_effort = effort_display_map.get(str(configured_effort).lower(), str(configured_effort).capitalize())
-            min_effort = str(configured_effort).lower()
-            max_effort = str(configured_effort).lower()
-        elif has_dynamic_capability:
-            min_effort = tunable_efforts[0]
-            max_effort = tunable_efforts[-1]
-            min_display = effort_display_map.get(min_effort, min_effort.capitalize())
-            max_display = effort_display_map.get(max_effort, max_effort.capitalize())
-            display_effort = f"Dinámico ({min_display} cotidiano ➔ {max_display} código interno)"
-        elif tunable_efforts:
-            min_effort = tunable_efforts[0]
-            max_effort = tunable_efforts[-1]
-            display_effort = effort_display_map.get(min_effort, min_effort.capitalize())
-        elif parenthesis_match:
-            min_effort = None
-            max_effort = None
-            display_effort = effort_display_map.get(parenthesis_match.group(2).lower(), parenthesis_match.group(2))
+        if effort_label:
+            effort_display = effort_display_map.get(effort_label.lower(), effort_label.capitalize())
         else:
-            min_effort = None
-            max_effort = None
-            display_effort = "Fijo / No parametrizable"
+            effort_display = "Estándar / Predeterminado"
 
-        result = {
-            "base_name": base_name,
-            "min_effort": min_effort if has_dynamic_capability else (configured_effort or None),
-            "max_effort": max_effort if has_dynamic_capability else (configured_effort or None),
-            "supports_dynamic_effort": has_dynamic_capability,
-            "display_effort": display_effort
-        }
-        self._model_capabilities_cache = result
-        return result
-
-    def get_model_info(self) -> tuple[str, str]:
-        caps = self.get_model_capabilities()
-        return caps["base_name"], caps["display_effort"]
-
-    def is_internal_code_task(self, prompt: str) -> bool:
-        clean_prompt = ''.join(
-            c for c in unicodedata.normalize('NFD', prompt)
-            if unicodedata.category(c) != 'Mn'
-        ).lower()
-
-        is_in_assistant_dir = os.path.abspath(self.working_directory).lower() == os.path.abspath(self.assistant_root_dir).lower()
-
-        internal_keywords = (
-            "codigo interno", "tu codigo", "codigo del asistente", "al asistente",
-            "del asistente", "en este proyecto", "en este repo", "en este repositorio"
-        )
-        code_actions = (
-            "modifica", "cambia", "edita", "corrige", "arregla", "refactoriza",
-            "agrega", "crea", "programa", "implementa", "actualiza", "optimiza",
-            "escribe", "reemplaza", "elimina", "anade", "desarrolla", "testea", "depura"
-        )
-        internal_files = (
-            "main.py", "config.py", "cli_launcher.py", "audio_engine.py",
-            "transcriber.py", "system_controller.py", "tts_speaker.py",
-            "sound_effects.py", "screen_reader.py", "iniciar_asistente.bat"
-        )
-
-        mentions_file = any(file_name in clean_prompt for file_name in internal_files)
-        mentions_internal = any(kw in clean_prompt for kw in internal_keywords)
-        has_code_action = any(re.search(rf'\b{re.escape(action)}\w*\b', clean_prompt) for action in code_actions)
-
-        if is_in_assistant_dir and (has_code_action or mentions_file):
-            return True
-        if mentions_internal and has_code_action:
-            return True
-        if mentions_file and has_code_action:
-            return True
-        return False
+        return model_name, effort_display
 
     def execute_prompt(self, prompt: str):
         if not prompt or not prompt.strip():
@@ -332,23 +185,13 @@ class AgyLauncher:
         if print_timeout:
             flags.extend(["--print-timeout", str(print_timeout)])
 
-        caps = self.get_model_capabilities()
         configured_model = getattr(config, "AGY_MODEL", None)
         if configured_model:
             flags.extend(["--model", str(configured_model)])
 
-        active_effort = None
-        if caps["supports_dynamic_effort"]:
-            if self.is_internal_code_task(prompt):
-                active_effort = caps["max_effort"]
-                console.print(f"[dim]⚡ Razonamiento alto ({active_effort}) activado para tarea interna...[/dim]")
-            else:
-                active_effort = caps["min_effort"]
-        elif getattr(config, "AGY_REASONING_EFFORT", None):
-            active_effort = str(config.AGY_REASONING_EFFORT)
-
-        if active_effort:
-            flags.extend(["--effort", str(active_effort)])
+        configured_effort = getattr(config, "AGY_REASONING_EFFORT", None)
+        if configured_effort:
+            flags.extend(["--effort", str(configured_effort)])
 
         if memory_mode == "per_session":
             if self.has_active_conversation:
@@ -372,22 +215,6 @@ class AgyLauncher:
                         errors="replace"
                     )
                     output, _ = proc.communicate()
-                    if proc.returncode != 0 and active_effort:
-                        combined_out = output.lower() if output else ""
-                        if "not supported" in combined_out or "conflicts with --effort" in combined_out:
-                            caps["supports_dynamic_effort"] = False
-                            active_effort = None
-                            fallback_cmd = [arg for arg in cmd if arg != "--effort" and arg != str(active_effort)]
-                            proc = subprocess.Popen(
-                                fallback_cmd,
-                                cwd=self.working_directory,
-                                stdout=subprocess.PIPE,
-                                stderr=subprocess.STDOUT,
-                                text=True,
-                                encoding="utf-8",
-                                errors="replace"
-                            )
-                            output, _ = proc.communicate()
                 except Exception as e:
                     console.print(f"[bold red]❌ Error al ejecutar Antigravity CLI:[/bold red] {e}")
                     sound_effects.play_error()
@@ -425,23 +252,9 @@ class AgyLauncher:
 
         clean_text = re.sub(r'\[ACTION:\s*(?:OPEN_URL|OPEN_APP|SCREENSHOT)\s*[^\]]*\]', '', output_text).strip()
         display_text = clean_text if clean_text else "Acción completada."
-
-        if active_effort:
-            effort_name_map = {
-                "high": "Alto (High)",
-                "medium": "Medio (Medium)",
-                "low": "Bajo (Low)",
-                "thinking": "Pensamiento (Thinking)"
-            }
-            effort_label = effort_name_map.get(str(active_effort).lower(), str(active_effort).capitalize())
-            panel_subtitle = f"[dim]⚡ Razonamiento: {effort_label}[/dim]"
-        else:
-            panel_subtitle = "[dim]⚡ Razonamiento: Estándar[/dim]"
-
         panel = Panel(
             Markdown(display_text),
             title=f"[bold cyan]🤖 Antigravity CLI[/bold cyan] [dim]({os.path.basename(self.working_directory)})[/dim]",
-            subtitle=panel_subtitle,
             border_style="cyan",
             padding=(1, 2)
         )

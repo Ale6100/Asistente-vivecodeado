@@ -62,3 +62,9 @@ TTS_RATE = "+25%"
 # 7. FEEDBACK AUDIBLE (BEEPS)
 # ==========================================
 SOUND_FEEDBACK_ENABLED = True
+
+# ==========================================
+# 8. INSPECCIÓN VISUAL Y LECTURA DE PANTALLA
+# ==========================================
+SCREEN_OCR_MIN_CHARS = 30
+

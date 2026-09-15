@@ -75,6 +75,11 @@ flowchart TD
 * **Arquitectura Híbrida de Doble Vía con Despachador de Acciones:**
   * **Vía Rápida Local (<50 ms):** Reconoce de forma instantánea acciones mecánicas deterministas sobre el sistema operativo (control de volumen, silenciar, capturas de pantalla, ordenar escritorio, minimizar ventanas, atajos de barra de tareas, temporizadores, cronómetro, fecha/hora, modo discreto y búsquedas directas). Incluye soporte de **repetición contextual inmediata** (*"otra"*, *"sacá otra"*, *"hacé otra"*, *"otra captura"*) para repetir la última acción sin latencia. Los patrones están rigurosamente anclados al inicio de la orden imperativa e incorporan filtro de cláusulas explicativas (*"noto que..."*, *"cuando te pido..."*, *"por ejemplo..."*), evitando falsos positivos cuando el usuario reflexiona o conversa.
   * **Vía Inteligente (Antigravity CLI + Action Dispatcher):** Las consultas con criterios semánticos, comparativos o superlativos (*"el video más visto de..."*, *"el mejor tutorial..."*, análisis de código, control de versiones Git, etc.) son derivadas a la IA con timeout extendido (`AGY_PRINT_TIMEOUT = "20m"`). Tras razonar e investigar, la IA cuenta con directrices esenciales que le exigen autonomía resolutiva proactiva: ante solicitudes no contempladas en comandos nativos, genera dinámicamente scripts o utilidades transitorias, valida los resultados y purga inmediatamente los temporales. Además, puede emitir directivas de escritorio (`[ACTION: OPEN_URL <url>]`, `[ACTION: OPEN_APP <app>]`, `[ACTION: SCREENSHOT]`) que el proceso local ejecuta inmediatamente en la sesión interactiva del usuario mediante `open_url_native` o APIs nativas, garantizando que los enlaces exactos y acciones se reflejen con foco en su pantalla física real.
+* **Visión y Lectura Óptica en Caliente (OCR Nativo Windows + Escalamiento Progresivo):**
+  * **Enfoque en Ventana Activa (Active Window Focus):** Detecta instantáneamente mediante Win32 API (`user32.dll`) cuál es la aplicación en foco y su título (ej. *"Visual Studio Code"*, *"PowerShell"*), capturando únicamente sus límites visuales e ignorando la barra de tareas, bandejas del sistema y ventanas de fondo.
+  * **Nivel 1 - OCR en Memoria Nativo de Windows (0 MB de descarga, 0 GPU):** Ejecuta el motor nativo `Windows.Media.Ocr.OcrEngine` (WinRT) directamente en memoria sin escribir archivos en disco. Extrae texto, trazas de excepción, logs de compilación o código fuente en ~200 ms, inyectándolo como texto plano en el prompt con una economía radical de tokens (ahorro del 80-90% frente a modelos de visión).
+  * **Nivel 2 - Escalamiento Progresivo a Visión Multimodal:** Si el OCR arroja información insuficiente (gráficos estadísticos, diagramas, esquemas en Figma, lienzos vacíos o imágenes sin texto) o el usuario formula una consulta con intención visual explícita (*"analizá este gráfico"*, *"diseño"*, *"colores"*, *"maqueta"*), el sistema escala automáticamente generando una captura temporal en `screenshots/temp_inspect_*.png` para que la IA la procese con visión multimodal.
+  * **Limpieza Efímera Garantizada:** La captura temporal se elimina de forma inmediata y automática (`try...finally`) al concluir la respuesta, asegurando cero basura residual en el disco.
 * **Respuesta por Voz Selectiva y Completa (TTS):**
   * **Vocalización Completa para Respuestas Relevantes:** Para preguntas, explicaciones de código, razonamiento y consultas informativas, el sintetizador pronuncia la respuesta completa de manera natural, sin cortes artificiales ni frases de truncamiento.
   * **Silencio en Acciones Mecánicas:** Para tareas de ejecución directa (búsquedas en Disney Plus, YouTube o Google, apertura de aplicaciones, cambios de volumen, capturas de pantalla, atajos o minimizado de ventanas), el asistente no emite parloteo innecesario por los altavoces; confirma la acción de forma no invasiva mediante el panel en consola y el sonido acústico (chime).
@@ -98,16 +103,18 @@ flowchart TD
 * **`main.py`**: Punto de entrada del programa. Administra el bucle principal de eventos, el escucha global de teclado (`pynput`), la captura de pulsaciones no bloqueantes en Windows (`msvcrt`), la orquestación del Fast-Path y el renderizado de la interfaz en terminal con `rich`.
 * **`audio_engine.py`**: Motor de captura de audio con PortAudio (`sounddevice`). Realiza auto-detección de micrófono, remuestreo dinámico a 16 kHz vía `scipy.signal`, calibración de ruido ambiental y detección de palabra de activación con `openwakeword`.
 * **`transcriber.py`**: Transcripción de voz a texto con `faster-whisper`. Implementa limpieza de patrones léxicos, descarte de muletillas, corrección fonética y validación de órdenes.
-* **`cli_launcher.py`**: Integración con el ejecutable `agy`. Inyecta directivas de contexto silenciosas, ejecuta el subproceso en la carpeta de trabajo activa, procesa directivas de apertura en el escritorio interactivo (`[ACTION: OPEN_URL/OPEN_APP]`) y coordina la síntesis de audio de la respuesta limpia.
+* **`screen_reader.py`**: Motor de captura de ventana activa, OCR en memoria nativo de Windows (`Windows.Media.Ocr`) y enrutamiento inteligente de escalamiento progresivo (texto vs visión multimodal).
+* **`cli_launcher.py`**: Integración con el ejecutable `agy`. Inyecta directivas de contexto silenciosas, análisis de pantalla en caliente, ejecuta el subproceso en la carpeta de trabajo activa, procesa directivas de apertura en el escritorio interactivo (`[ACTION: OPEN_URL/OPEN_APP]`) y coordina la síntesis de audio de la respuesta limpia.
 * **`system_controller.py`**: Controlador nativo del sistema operativo (Fast-Path). Ejecuta instantáneamente (<50 ms) acciones mecánicas de Windows, discriminando consultas literales de aquellas que requieren razonamiento semántico para delegarlas a la IA.
 * **`tts_speaker.py`**: Módulo de síntesis de voz (Text-to-Speech) con `edge-tts`, reproducción de audio con `pygame.mixer` y fallback offline a Windows SAPI5 (`System.Speech`).
 * **`sound_effects.py`**: Señalización acústica no bloqueante con `winsound.Beep`.
-* **`config.py`**: Parámetros globales y ajustables del sistema (palabras clave, atajos, modelos, voz, velocidad, silencios).
+* **`config.py`**: Parámetros globales y ajustables del sistema (palabras clave, atajos, modelos, voz, velocidad, silencios, umbrales de OCR).
 * **`iniciar_asistente.bat`**: Script de arranque para Windows. Detecta el ejecutable de Python disponible (`py -3` o `python`), genera el entorno virtual, instala dependencias y lanza el asistente manteniendo la consola visible ante cualquier error.
 * **`requirements.txt`**: Lista de dependencias del ecosistema Python necesarias para el proyecto.
 * **`tools/`**: Directorio de herramientas y binarios complementarios para interactuar con APIs del sistema operativo (contiene `SortDesktop.exe` para organizar los elementos del escritorio vía Windows Shell COM).
 * **`.gitignore`**: Exclusión de archivos binarios, cachés de modelos y entornos virtuales locales.
 * **`AGENTS.md`**: Guía y normas arquitectónicas para agentes de desarrollo.
+
 
 ---
 
@@ -197,10 +204,13 @@ Una vez abierto el asistente, puedes interactuar tanto por voz como por teclado:
 | **Modo Teclado** | Pulsar **`[Enter]`** o **`[T]`** | Pausa el micrófono para tipear instrucciones o pegar rutas largas. |
 | **Cambiar Repositorio** | `/c <ruta>`, `/cd <ruta>` o por voz | Redirige la carpeta activa donde opera Antigravity CLI (renueva memoria). |
 | **Reiniciar Memoria** | *"Nueva sesión"* / *"Olvidá lo anterior"* / `/new` | Resetea la memoria conversacional en caliente sin cerrar la app. |
+| **Lectura de Pantalla e IA** | *"Mirá la pantalla y decime qué falló"* / *"Fijate este error"* | Extrae el texto de la ventana activa vía OCR nativo o escala a visión multimodal. |
+| **Copiar Texto de Pantalla** | *"Copiar texto de la pantalla"* / *"Copiar pantalla"* | Realiza OCR ultrarrápido en memoria y copia el texto al portapapeles de Windows (`clip`). |
 | **Búsqueda Web Rápida** | *"Abrí Netflix y buscá El diablo viste a la moda"* / *"Busca Avengers en Disney Plus"* | Abre la búsqueda en el navegador predeterminado en <50 ms sin parloteo de voz. |
 | **Búsqueda en Sitios y Videos** | *"Busca trailer de Matrix en YouTube"* / *"Busca en YouTube el trailer de Matrix"* / *"Buscame el video de Midudev"* | Abre la búsqueda directa en YouTube, Google, Disney Plus, GitHub, etc. en <50 ms. |
-| **Captura de Pantalla** | *"Sacá una captura de pantalla"* | Captura el escritorio y lo guarda en `screenshots/captura_*.png`. |
-| **Repetición Contextual** | *"Otra"* / *"Sacá otra"* / *"Hacé otra"* / *"Otra más"* | Repite de inmediato la última acción mecánica ejecutada (ej. captura o volumen). |
+| **Captura de Pantalla** | *"Sacá una captura de pantalla"* | Captura el escritorio completo y lo guarda en `screenshots/captura_*.png`. |
+| **Captura de Ventana** | *"Sacá una captura de ventana"* / *"Captura de esta ventana"* | Captura únicamente los límites de la ventana activa en `screenshots/captura_ventana_*.png`. |
+| **Repetición Contextual** | *"Otra"* / *"Sacá otra"* / *"Hacé otra"* / *"Otra más"* | Repite de inmediato la última acción mecánica ejecutada (captura, ventana o volumen). |
 | **Control de Volumen** | *"Subí el volumen"* / *"Volumen al 30"* / *"Mute"* | Ajusta o silencia el mezclador de sonido de Windows. |
 | **Control de Ventanas** | *"Minimizar todo"* / *"Cerrar ventana"* | Minimiza el escritorio (`Win+D`) o cierra la app activa (`Alt+F4`). |
 | **Atajo de Barra de Tareas** | *"Atajo 1"* (hasta *"Atajo 9"*) | Lanza el programa fijado en la posición N de la barra de tareas. |
@@ -230,6 +240,7 @@ Todos los parámetros del sistema se centralizan en [`config.py`](config.py):
 | `WHISPER_LANGUAGE` | `"es"` | Idioma forzado para transcripción precisa en español. |
 | `WHISPER_DEVICE` | `"cpu"` | Dispositivo de cómputo para inferencia (`cpu` o `cuda`). |
 | `WHISPER_COMPUTE_TYPE` | `"int8"` | Cuantización int8 para inferencia ultrarrápida en procesadores estándar. |
+| `SCREEN_OCR_MIN_CHARS` | `30` | Mínimo de caracteres legibles en OCR antes de escalar automáticamente a visión multimodal. |
 | `TTS_ENABLED` | `True` | Habilita o deshabilita la síntesis de voz de salida. |
 | `TTS_VOICE` | `"es-ES-AlvaroNeural"` | Voz neuronal en español (`AlvaroNeural`, `ElviraNeural`, `JorgeNeural`, `TomasNeural`). |
 | `TTS_RATE` | `"+25%"` | Ajuste porcentual de la velocidad del habla para mayor agilidad. |
@@ -238,3 +249,4 @@ Todos los parámetros del sistema se centralizan en [`config.py`](config.py):
 | `SESSION_MEMORY_MODE` | `"per_session"` | Modo de memoria: `"per_session"` (limpia al abrir), `"persistent"` o `"stateless"`. |
 | `AGY_PROJECT_ID` | `"asistente-voz"` | Identificador de proyecto exclusivo para aislar el asistente de otras consolas. |
 | `AGY_PRINT_TIMEOUT` | `"20m"` | Límite de espera de ejecución para tareas complejas de desarrollo en Antigravity CLI. |
+

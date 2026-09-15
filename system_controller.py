@@ -12,6 +12,7 @@ from rich.console import Console
 
 import config
 import sound_effects
+import screen_reader
 
 console = Console()
 
@@ -223,6 +224,17 @@ class SystemController:
                 if ruta_captura:
                     return True, f"Captura de pantalla guardada en: {ruta_captura}", False, False
                 return True, "No se pudo tomar la captura de pantalla.", False, False
+            if self.last_action == "screenshot_window":
+                _, rect = screen_reader.get_active_window_info()
+                base_dir = os.path.dirname(os.path.abspath(__file__))
+                folder = os.path.join(base_dir, "screenshots")
+                os.makedirs(folder, exist_ok=True)
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                target_path = os.path.join(folder, f"captura_ventana_{timestamp}.png")
+                ruta = screen_reader.capture_window_to_file(rect, target_path)
+                if ruta:
+                    return True, f"Captura de ventana guardada en: {ruta}", False, False
+                return True, "No se pudo tomar la captura de la ventana.", False, False
             if self.last_action == "volume_up":
                 for _ in range(5):
                     send_key_tap(VK_VOLUME_UP)
@@ -233,6 +245,30 @@ class SystemController:
                     send_key_tap(VK_VOLUME_DOWN)
                     time.sleep(0.02)
                 return True, "Volumen reducido.", False, False
+
+        if re.match(COMMAND_PREFIX_PATTERN + r'(?:(?:sacar|sacá|saca|hacer|hacé|hace|tomar|tomá|toma)\s+(?:una\s+)?captura\s+de\s+(?:esta\s+)?ventana|captura\s+de\s+ventana)$', lower):
+            self.last_action = "screenshot_window"
+            _, rect = screen_reader.get_active_window_info()
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            folder = os.path.join(base_dir, "screenshots")
+            os.makedirs(folder, exist_ok=True)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            target_path = os.path.join(folder, f"captura_ventana_{timestamp}.png")
+            ruta = screen_reader.capture_window_to_file(rect, target_path)
+            if ruta:
+                return True, f"Captura de ventana guardada en: {ruta}", False, False
+            return True, "No se pudo tomar la captura de la ventana.", False, False
+
+        if re.match(COMMAND_PREFIX_PATTERN + r'(?:copiar|copiá|copia|copiame)\s+(?:el\s+)?(?:texto|contenido)\s+(?:de\s+)?(?:la\s+pantalla|la\s+ventana|la\s+consola|la\s+terminal)$', lower):
+            _, rect = screen_reader.get_active_window_info()
+            texto = screen_reader.execute_in_memory_ocr(rect)
+            if texto:
+                try:
+                    subprocess.run(["clip"], input=texto.encode("utf-16le"), check=True)
+                    return True, f"Texto de la pantalla copiado al portapapeles ({len(texto)} caracteres).", False, False
+                except Exception:
+                    pass
+            return True, "No se detectó texto en la pantalla.", False, False
 
         if re.match(COMMAND_PREFIX_PATTERN + r'(?:(?:sacar|sacá|saca|hacer|hacé|hace|tomar|tomá|toma)\s+(?:una\s+)?captura(?:\s+de\s+pantalla)?(?:\s+del?\s+escritorio)?|captura\s+de\s+pantalla|captura|screenshot)$', lower):
             self.last_action = "screenshot"

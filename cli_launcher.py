@@ -16,6 +16,7 @@ if hasattr(sys.stderr, 'reconfigure'):
 
 import config
 import sound_effects
+import screen_reader
 from tts_speaker import TTSSpeaker
 from system_controller import open_url_native, take_screenshot
 
@@ -103,7 +104,30 @@ class AgyLauncher:
             "\n\nInstrucción del usuario:\n"
         )
 
-        full_prompt = f"{voice_context}{prompt}"
+        temp_visual_file = None
+        screen_context = ""
+
+        if screen_reader.is_screen_inspection_request(prompt):
+            with console.status("[bold cyan]👁️ Analizando pantalla...[/bold cyan]", spinner="dots"):
+                mode, content, window_title = screen_reader.inspect_screen_for_prompt(prompt)
+                if mode == "ocr":
+                    screen_context = (
+                        f"\n\n[Contexto visual capturado de la ventana activa: '{window_title}']\n"
+                        "Texto detectado en pantalla mediante reconocimiento óptico de caracteres (OCR):\n"
+                        f"\"\"\"\n{content}\n\"\"\"\n"
+                    )
+                    self.record_system_action(f"Lectura de pantalla ({window_title})", f"Texto extraído por OCR: {len(content)} caracteres")
+                elif mode == "image":
+                    temp_visual_file = content
+                    screen_context = (
+                        f"\n\n[Contexto visual capturado de la ventana activa: '{window_title}']\n"
+                        "El texto extraído por OCR fue insuficiente o se solicitó análisis visual/gráfico explícito.\n"
+                        f"Se tomó una captura temporal guardada en: '{temp_visual_file}'.\n"
+                        "Por favor analiza la imagen usando visión multimodal para responder a la consulta del usuario.\n"
+                    )
+                    self.record_system_action(f"Captura para análisis ({window_title})", f"Captura temporal enviada para visión multimodal: {temp_visual_file}")
+
+        full_prompt = f"{voice_context}{screen_context}{prompt}"
 
         memory_mode = getattr(config, "SESSION_MEMORY_MODE", "per_session")
         project_id = getattr(config, "AGY_PROJECT_ID", "asistente-voz")
@@ -125,22 +149,29 @@ class AgyLauncher:
         flags.extend(["-p", full_prompt])
         cmd = [self.agy_cmd] + flags
 
-        with console.status("[bold cyan]🤖 Antigravity pensando y ejecutando...[/bold cyan]", spinner="dots"):
-            try:
-                proc = subprocess.Popen(
-                    cmd,
-                    cwd=self.working_directory,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace"
-                )
-                output, _ = proc.communicate()
-            except Exception as e:
-                console.print(f"[bold red]❌ Error al ejecutar Antigravity CLI:[/bold red] {e}")
-                sound_effects.play_error()
-                return
+        try:
+            with console.status("[bold cyan]🤖 Antigravity pensando y ejecutando...[/bold cyan]", spinner="dots"):
+                try:
+                    proc = subprocess.Popen(
+                        cmd,
+                        cwd=self.working_directory,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        text=True,
+                        encoding="utf-8",
+                        errors="replace"
+                    )
+                    output, _ = proc.communicate()
+                except Exception as e:
+                    console.print(f"[bold red]❌ Error al ejecutar Antigravity CLI:[/bold red] {e}")
+                    sound_effects.play_error()
+                    return
+        finally:
+            if temp_visual_file and os.path.exists(temp_visual_file):
+                try:
+                    os.remove(temp_visual_file)
+                except Exception:
+                    pass
 
         if proc.returncode == 0:
             self.has_active_conversation = True

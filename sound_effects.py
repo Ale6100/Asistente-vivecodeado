@@ -35,3 +35,11 @@ def play_success():
 def play_error():
     """Tono grave de advertencia."""
     threading.Thread(target=lambda: _play(400, 250), daemon=True).start()
+
+def play_interrupted():
+    """Tono sutil descendente cuando se interrumpe explícitamente."""
+    def _tone():
+        _play(700, 70)
+        _play(450, 90)
+    threading.Thread(target=_tone, daemon=True).start()
+

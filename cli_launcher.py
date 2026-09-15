@@ -30,6 +30,8 @@ class AgyLauncher:
         self.has_active_conversation = False
         self.action_history = []
         self.assistant_root_dir = os.path.dirname(os.path.abspath(__file__))
+        self.current_proc = None
+        self.is_busy = False
 
         if config.DEFAULT_PROJECT_DIR and os.path.isdir(config.DEFAULT_PROJECT_DIR):
             self.working_directory = os.path.abspath(config.DEFAULT_PROJECT_DIR)
@@ -38,6 +40,29 @@ class AgyLauncher:
 
         if not shutil.which(self.agy_cmd):
             console.print(f"[yellow]⚠️ Advertencia: No se encontró '{self.agy_cmd}' en el PATH del sistema.[/yellow]")
+
+    def interrupt(self) -> bool:
+        """
+        Interrumpe de inmediato cualquier actividad en curso:
+        - Detiene la voz del asistente si está hablando.
+        - Termina el proceso CLI si está pensando/ejecutando.
+        Retorna True si hubo algo que se interrumpió.
+        """
+        interrupted = False
+        if self.speaker.is_speaking:
+            self.speaker.stop()
+            interrupted = True
+
+        if self.current_proc is not None:
+            try:
+                self.current_proc.terminate()
+                interrupted = True
+            except Exception:
+                pass
+            self.current_proc = None
+
+        return interrupted
+
 
     def record_system_action(self, instruction: str, result_message: str):
         timestamp = datetime.now().strftime("%H:%M:%S")
@@ -202,6 +227,7 @@ class AgyLauncher:
         flags.extend(["-p", full_prompt])
         cmd = [self.agy_cmd] + flags
 
+        self.is_busy = True
         try:
             with console.status("[bold cyan]🤖 Antigravity pensando y ejecutando...[/bold cyan]", spinner="dots"):
                 try:
@@ -214,17 +240,22 @@ class AgyLauncher:
                         encoding="utf-8",
                         errors="replace"
                     )
+                    self.current_proc = proc
                     output, _ = proc.communicate()
                 except Exception as e:
                     console.print(f"[bold red]❌ Error al ejecutar Antigravity CLI:[/bold red] {e}")
                     sound_effects.play_error()
                     return
+                finally:
+                    self.current_proc = None
         finally:
-            if temp_visual_file and os.path.exists(temp_visual_file):
-                try:
-                    os.remove(temp_visual_file)
-                except Exception:
-                    pass
+            self.is_busy = False
+
+        if temp_visual_file and os.path.exists(temp_visual_file):
+            try:
+                os.remove(temp_visual_file)
+            except Exception:
+                pass
 
         if proc.returncode == 0:
             self.has_active_conversation = True
@@ -267,5 +298,10 @@ class AgyLauncher:
             should_speak = False
 
         if should_speak:
-            with console.status("[bold magenta]🔊 Hablando...[/bold magenta]", spinner="point"):
-                self.speaker.speak(clean_text)
+            self.is_busy = True
+            try:
+                with console.status("[bold magenta]🔊 Hablando...[/bold magenta]", spinner="point"):
+                    self.speaker.speak(clean_text)
+            finally:
+                self.is_busy = False
+

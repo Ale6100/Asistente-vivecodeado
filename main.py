@@ -36,26 +36,57 @@ console = Console()
 
 manual_trigger_event = threading.Event()
 
-def on_hotkey_triggered():
-    manual_trigger_event.set()
+def format_hotkey(hotkey: str | None) -> str:
+    if not hotkey:
+        return ""
+    h = hotkey.strip().lower()
+    if not h.startswith("<") and not "+" in h:
+        return f"<{h}>"
+    return h
 
-def setup_hotkey_listener():
-    hotkey = config.HOTKEY_PUSH_TO_TALK.strip()
-    if not hotkey.startswith("<") and not "+" in hotkey:
-        formatted_hotkey = f"<{hotkey.lower()}>"
-    else:
-        formatted_hotkey = hotkey.lower()
+def setup_hotkey_listener(get_launcher_cb):
+    ptt_raw = getattr(config, "HOTKEY_PUSH_TO_TALK", "f8")
+    interrupt_raw = getattr(config, "HOTKEY_INTERRUPT", None)
+
+    formatted_ptt = format_hotkey(ptt_raw)
+    formatted_interrupt = format_hotkey(interrupt_raw) if interrupt_raw else None
+
+    def on_interrupt():
+        launcher = get_launcher_cb()
+        if launcher is not None:
+            was_busy = launcher.interrupt()
+            if was_busy:
+                sound_effects.play_interrupted()
+                console.print("\n[bold yellow]⏹️ Asistente interrumpido explícitamente.[/bold yellow]")
+
+    def on_ptt():
+        launcher = get_launcher_cb()
+        if launcher is not None and (launcher.is_busy or launcher.speaker.is_speaking):
+            on_interrupt()
+        else:
+            manual_trigger_event.set()
+
+    hotkey_map = {}
+    if formatted_ptt:
+        hotkey_map[formatted_ptt] = on_ptt
+    if formatted_interrupt and formatted_interrupt != formatted_ptt:
+        hotkey_map[formatted_interrupt] = on_interrupt
 
     try:
-        hotkeys = keyboard.GlobalHotKeys({
-            formatted_hotkey: on_hotkey_triggered
-        })
+        hotkeys = keyboard.GlobalHotKeys(hotkey_map)
         hotkeys.start()
-        return hotkeys, formatted_hotkey
+        return hotkeys, formatted_ptt, formatted_interrupt
     except Exception:
-        return None, hotkey
+        try:
+            if formatted_ptt:
+                hotkeys = keyboard.GlobalHotKeys({formatted_ptt: on_ptt})
+                hotkeys.start()
+                return hotkeys, formatted_ptt, formatted_interrupt
+            return None, formatted_ptt, formatted_interrupt
+        except Exception:
+            return None, formatted_ptt, formatted_interrupt
 
-def print_banner(formatted_hotkey: str, mic_name: str, working_dir: str, model_name: str, reasoning_effort: str):
+def print_banner(formatted_ptt: str, formatted_interrupt: str | None, mic_name: str, working_dir: str, model_name: str, reasoning_effort: str):
     wake_display = ", ".join([w.replace("_", " ").title() for w in config.WAKE_WORDS])
     tts_status = f"Activada ({config.TTS_RATE})" if getattr(config, "TTS_ENABLED", True) else "Desactivada"
     memory_mode = getattr(config, "SESSION_MEMORY_MODE", "per_session")
@@ -67,7 +98,11 @@ def print_banner(formatted_hotkey: str, mic_name: str, working_dir: str, model_n
     table.add_row("📁 [bold cyan]Repositorio / Carpeta activa:[/bold cyan]", f"[bold yellow]{working_dir}[/bold yellow]")
     table.add_row("🧠 [bold cyan]Memoria de conversación:[/bold cyan]", f"[bold green]{memory_display}[/bold green]")
     table.add_row("🗣️ [bold cyan]Palabra de activación:[/bold cyan]", f"[bold green]{wake_display}[/bold green]")
-    table.add_row("⌨️ [bold cyan]Atajo de voz (Toggle):[/bold cyan]", f"[bold green]{formatted_hotkey}[/bold green]")
+    table.add_row("⌨️ [bold cyan]Atajo de voz (Toggle):[/bold cyan]", f"[bold green]{formatted_ptt}[/bold green]")
+    if formatted_interrupt and formatted_interrupt != formatted_ptt:
+        table.add_row("⏹️ [bold cyan]Atajo de interrupción rápida:[/bold cyan]", f"[bold yellow]{formatted_interrupt}[/bold yellow] o pulsar [bold yellow]{formatted_ptt}[/bold yellow]")
+    else:
+        table.add_row("⏹️ [bold cyan]Atajo de interrupción rápida:[/bold cyan]", f"Pulsar [bold yellow]{formatted_ptt}[/bold yellow]")
     table.add_row("📝 [bold cyan]Modo escritura por teclado:[/bold cyan]", "[bold yellow]Pulsa [Enter] o [T][/bold yellow]")
     table.add_row("🔊 [bold cyan]Respuesta por voz (TTS):[/bold cyan]", f"[bold green]{tts_status}[/bold green]")
     table.add_row("🎙️ [bold cyan]Micrófono:[/bold cyan]", f"[white]{mic_name}[/white]")
@@ -79,6 +114,7 @@ def print_banner(formatted_hotkey: str, mic_name: str, working_dir: str, model_n
         border_style="bright_blue"
     )
     console.print(panel)
+
 
 def try_handle_session_reset(text: str, launcher: AgyLauncher) -> bool:
     clean = text.strip().lower()
@@ -186,7 +222,8 @@ def handle_text_mode(launcher: AgyLauncher, audio_engine: AudioEngine, system_co
     return continue_running
 
 def main():
-    hotkey_listener, formatted_hotkey = setup_hotkey_listener()
+    launcher_ref = [None]
+    hotkey_listener, formatted_ptt, formatted_interrupt = setup_hotkey_listener(lambda: launcher_ref[0])
 
     try:
         with console.status("[bold cyan]Iniciando servicios del asistente...", spinner="dots") as status:
@@ -198,17 +235,23 @@ def main():
 
             status.update("[bold cyan]Conectando con Antigravity y entorno...")
             launcher = AgyLauncher()
+            launcher_ref[0] = launcher
             system_controller = SystemController(speaker=launcher.speaker)
     except Exception as e:
         console.print(f"[bold red]❌ Error al inicializar:[/bold red] {e}")
         return
 
     model_name, reasoning_effort = launcher.get_model_info()
-    print_banner(formatted_hotkey, audio_engine.device_name, launcher.working_directory, model_name, reasoning_effort)
+    print_banner(formatted_ptt, formatted_interrupt, audio_engine.device_name, launcher.working_directory, model_name, reasoning_effort)
     wake_display = config.WAKE_WORDS[0].replace("_", " ").title()
-    console.print(f"\n[bold green]🟢 Listo.[/bold green] Di '[bold cyan]{wake_display}[/bold cyan]', presiona '[bold cyan]{formatted_hotkey}[/bold cyan]', o pulsa '[bold cyan]Enter[/bold cyan]' para escribir.\n")
+    console.print(f"\n[bold green]🟢 Listo.[/bold green] Di '[bold cyan]{wake_display}[/bold cyan]', presiona '[bold cyan]{formatted_ptt}[/bold cyan]', o pulsa '[bold cyan]Enter[/bold cyan]' para escribir.")
+    if formatted_interrupt and formatted_interrupt != formatted_ptt:
+        console.print(f"[dim]Tip: Puedes interrumpir al asistente en cualquier momento pulsando '{formatted_interrupt}' o '{formatted_ptt}'.[/dim]\n")
+    else:
+        console.print(f"[dim]Tip: Puedes interrumpir al asistente en cualquier momento pulsando '{formatted_ptt}'.[/dim]\n")
 
     audio_engine.start()
+
 
     try:
         while True:

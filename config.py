@@ -9,9 +9,10 @@ WAKE_WORDS = ["alexa"]
 WAKE_WORD_THRESHOLD = 0.5
 
 # ==========================================
-# 2. TECLA DE ATAJO GLOBAL (PUSH-TO-TALK / TOGGLE)
+# 2. TECLAS DE ATAJO GLOBAL (PUSH-TO-TALK E INTERRUPCIÓN)
 # ==========================================
 HOTKEY_PUSH_TO_TALK = "f8"
+HOTKEY_INTERRUPT = None  # Interrupción unificada exclusivamente con F8
 
 # ==========================================
 # 3. CONFIGURACIÓN DE AUDIO Y MICRÓFONO

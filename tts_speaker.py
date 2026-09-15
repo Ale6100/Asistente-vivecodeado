@@ -53,9 +53,29 @@ class TTSSpeaker:
         self.voice = getattr(config, "TTS_VOICE", "es-ES-AlvaroNeural")
         self.rate = getattr(config, "TTS_RATE", "+25%")
         self.is_speaking = False
+        self._stop_event = threading.Event()
+        self._sapi_process = None
+
+    def stop(self):
+        """Interrumpe y silencia de inmediato cualquier síntesis o reproducción en curso."""
+        self._stop_event.set()
+        if PYGAME_AVAILABLE:
+            try:
+                if pygame.mixer.get_init():
+                    pygame.mixer.music.stop()
+                    pygame.mixer.music.unload()
+            except Exception:
+                pass
+        if self._sapi_process is not None:
+            try:
+                self._sapi_process.terminate()
+            except Exception:
+                pass
+            self._sapi_process = None
+        self.is_speaking = False
 
     def speak(self, text: str):
-        """Sintetiza y reproduce el texto por los altavoces de forma síncrona."""
+        """Sintetiza y reproduce el texto por los altavoces de forma síncrona con soporte de interrupción."""
         if not getattr(config, "TTS_ENABLED", True) or not text:
             return
 
@@ -63,17 +83,22 @@ class TTSSpeaker:
         if not speech_text:
             return
 
+        self._stop_event.clear()
         self.is_speaking = True
         try:
             asyncio.run(self._speak_edge(speech_text))
         except Exception:
-            self._speak_windows_sapi(speech_text)
+            if not self._stop_event.is_set():
+                self._speak_windows_sapi(speech_text)
         finally:
             self.is_speaking = False
 
     async def _speak_edge(self, text: str):
-        """Descarga el audio de Edge-TTS con velocidad aumentada y lo reproduce."""
+        """Descarga el audio de Edge-TTS con velocidad aumentada y lo reproduce con parada instantánea."""
         import edge_tts
+
+        if self._stop_event.is_set():
+            return
 
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
             temp_path = f.name
@@ -82,15 +107,25 @@ class TTSSpeaker:
             communicate = edge_tts.Communicate(text, self.voice, rate=self.rate)
             await communicate.save(temp_path)
 
+            if self._stop_event.is_set():
+                return
+
             if PYGAME_AVAILABLE:
                 pygame.mixer.music.load(temp_path)
                 pygame.mixer.music.play()
                 while pygame.mixer.music.get_busy():
-                    await asyncio.sleep(0.06)
+                    if self._stop_event.is_set():
+                        pygame.mixer.music.stop()
+                        break
+                    await asyncio.sleep(0.04)
                 pygame.mixer.music.unload()
             else:
+                if self._stop_event.is_set():
+                    return
                 cmd = f"(New-Object Media.SoundPlayer '{temp_path}').PlaySync()"
-                subprocess.run(["powershell", "-c", cmd], check=True)
+                self._sapi_process = subprocess.Popen(["powershell", "-c", cmd])
+                self._sapi_process.wait()
+                self._sapi_process = None
         finally:
             if os.path.exists(temp_path):
                 try:
@@ -100,6 +135,8 @@ class TTSSpeaker:
 
     def _speak_windows_sapi(self, text: str):
         """Fallback offline mediante el sintetizador de voz integrado de Windows."""
+        if self._stop_event.is_set():
+            return
         try:
             escaped = text.replace("'", "''").replace('"', '`"')
             ps_cmd = (
@@ -107,6 +144,9 @@ class TTSSpeaker:
                 "$synth.Rate = 2; "
                 f"$synth.Speak('{escaped}')"
             )
-            subprocess.run(["powershell", "-NoProfile", "-Command", ps_cmd], capture_output=True)
+            self._sapi_process = subprocess.Popen(["powershell", "-NoProfile", "-Command", ps_cmd])
+            self._sapi_process.wait()
+            self._sapi_process = None
         except Exception:
             pass
+

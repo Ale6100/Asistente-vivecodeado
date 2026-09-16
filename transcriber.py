@@ -25,7 +25,8 @@ class WhisperTranscriber:
         self.model = WhisperModel(
             config.WHISPER_MODEL_SIZE,
             device=config.WHISPER_DEVICE,
-            compute_type=config.WHISPER_COMPUTE_TYPE
+            compute_type=config.WHISPER_COMPUTE_TYPE,
+            cpu_threads=4
         )
 
     def transcribe(self, audio_data: np.ndarray) -> str:
@@ -43,9 +44,10 @@ class WhisperTranscriber:
             audio_data,
             language=config.WHISPER_LANGUAGE,
             initial_prompt=config.WHISPER_PROMPT_BIAS,
-            beam_size=5,
+            beam_size=1,
+            best_of=1,
             vad_filter=True,
-            vad_parameters=dict(min_silence_duration_ms=600)
+            vad_parameters=dict(min_silence_duration_ms=400)
         )
 
         text_parts = [segment.text.strip() for segment in segments]

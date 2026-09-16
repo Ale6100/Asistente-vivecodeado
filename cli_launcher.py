@@ -241,7 +241,32 @@ class AgyLauncher:
                         errors="replace"
                     )
                     self.current_proc = proc
-                    output, _ = proc.communicate()
+                    accumulated_output = []
+                    executed_actions = set()
+
+                    for line in iter(proc.stdout.readline, ''):
+                        accumulated_output.append(line)
+                        for match in re.finditer(r'\[ACTION:\s*(OPEN_URL|OPEN_APP|SCREENSHOT)\s*([^\]]*)\]', line, re.IGNORECASE):
+                            act_type = match.group(1).upper()
+                            act_target = match.group(2).strip().strip('"\'')
+                            act_key = (act_type, act_target)
+                            if act_key not in executed_actions:
+                                executed_actions.add(act_key)
+                                if act_type == "OPEN_URL":
+                                    open_url_native(act_target)
+                                elif act_type == "OPEN_APP":
+                                    try:
+                                        subprocess.Popen(act_target, shell=True)
+                                    except Exception as err:
+                                        console.print(f"[red]Error al abrir aplicación {act_target}:[/red] {err}")
+                                elif act_type == "SCREENSHOT":
+                                    saved_path = take_screenshot()
+                                    if saved_path:
+                                        console.print(f"[bold green]📸 Captura guardada en:[/bold green] {saved_path}")
+                                        self.record_system_action("Captura de pantalla", f"Captura guardada en: {saved_path}")
+
+                    proc.wait()
+                    output = "".join(accumulated_output)
                 except Exception as e:
                     console.print(f"[bold red]❌ Error al ejecutar Antigravity CLI:[/bold red] {e}")
                     sound_effects.play_error()
@@ -268,6 +293,10 @@ class AgyLauncher:
         for action_type, action_target in action_matches:
             target = action_target.strip().strip('"\'')
             act_upper = action_type.upper()
+            act_key = (act_upper, target)
+            if act_key in executed_actions:
+                continue
+            executed_actions.add(act_key)
             if act_upper == "OPEN_URL":
                 open_url_native(target)
             elif act_upper == "OPEN_APP":

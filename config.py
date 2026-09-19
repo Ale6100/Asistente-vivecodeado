@@ -22,8 +22,8 @@ AUDIO_CHANNELS = 1
 INPUT_DEVICE_INDEX = None
 
 SILENCE_THRESHOLD = 0.001
-SILENCE_DURATION = 1.0
-MIN_RECORD_SECONDS = 0.8
+SILENCE_DURATION = 2.2
+MIN_RECORD_SECONDS = 1.2
 MAX_RECORD_SECONDS = 300.0  # Límite máximo de seguridad (5 min); el fin de la grabación lo determina el silencio al terminar de hablar
 
 

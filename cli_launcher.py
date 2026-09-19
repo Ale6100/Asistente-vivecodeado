@@ -1,6 +1,7 @@
 import sys
 import os
 import re
+import time
 import shutil
 import subprocess
 import webbrowser
@@ -134,6 +135,8 @@ class AgyLauncher:
     def execute_prompt(self, prompt: str):
         if not prompt or not prompt.strip():
             return
+
+        start_time = time.time()
 
         if not shutil.which(self.agy_cmd):
             error_message = (
@@ -310,11 +313,15 @@ class AgyLauncher:
                     console.print(f"[bold green]📸 Captura guardada en:[/bold green] {saved_path}")
                     self.record_system_action("Captura de pantalla", f"Captura guardada en: {saved_path}")
 
+        end_time_str = datetime.now().strftime("%H:%M:%S")
+        elapsed_seconds = time.time() - start_time
+
         clean_text = re.sub(r'\[ACTION:\s*(?:OPEN_URL|OPEN_APP|SCREENSHOT)\s*[^\]]*\]', '', output_text).strip()
         display_text = clean_text if clean_text else "Acción completada."
         panel = Panel(
             Markdown(display_text),
-            title=f"[bold cyan]🤖 Antigravity CLI[/bold cyan] [dim]({os.path.basename(self.working_directory)})[/dim]",
+            title=f"[bold cyan]🤖 Antigravity CLI[/bold cyan] [dim]({os.path.basename(self.working_directory)}) • {end_time_str}[/dim]",
+            subtitle=f"[dim]Duración: {elapsed_seconds:.1f}s[/dim]",
             border_style="cyan",
             padding=(1, 2)
         )

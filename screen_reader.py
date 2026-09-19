@@ -31,7 +31,8 @@ SCREEN_INSPECTION_PATTERN = re.compile(
     r'por\s+qu[eé]\s+(?:falla|fall[oó]|da\s+error)\s+(?:esto|mi\s+c[oó]digo|la\s+terminal)|'
     r'explicame\s+(?:este\s+error|lo\s+que\s+(?:estoy\s+viendo|hay\s+en\s+pantalla))|'
     r'expl[ií]came\s+(?:este\s+error|lo\s+que\s+(?:estoy\s+viendo|hay\s+en\s+pantalla))|'
-    r'(?:pantalla|ventana|consola|terminal)\s+(?:y\s+decime|y\s+decirme|y\s+explicame)'
+    r'(?:pantalla|ventana|consola|terminal)\s+(?:y\s+decime|y\s+decirme|y\s+explicame)|'
+    r'(?:cu[aá]l\s+es\s+tu\s+opini[oó]n|dame\s+tu\s+opini[oó]n|qu[eé]\s+(?:opin[aá]s|pens[aá]s|te\s+parece)|c[oó]mo\s+(?:lo\s+)?ves|opin[aá])\s+(?:de\s+|sobre\s+|acerca\s+de\s+)?(?:esto|ac[aá]|la\s+pantalla|esta\s+ventana|esta\s+pantalla|lo\s+que\s+(?:hay|ves|estoy\s+viendo))'
     r')',
     re.IGNORECASE
 )

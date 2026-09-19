@@ -13,6 +13,7 @@ if hasattr(sys.stderr, 'reconfigure'):
     sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
 import threading
+from datetime import datetime
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -128,9 +129,10 @@ def try_handle_session_reset(text: str, launcher: AgyLauncher) -> bool:
     if clean in reset_triggers:
         launcher.reset_conversation()
         msg = "Sesión reiniciada. Empezamos una conversación limpia."
+        reset_time = datetime.now().strftime("%H:%M:%S")
         panel = Panel(
             Markdown(msg),
-            title="[bold cyan]🔄 Memoria Reiniciada[/bold cyan]",
+            title=f"[bold cyan]🔄 Memoria Reiniciada[/bold cyan] [dim]• {reset_time}[/dim]",
             border_style="cyan",
             padding=(1, 2)
         )
@@ -182,9 +184,10 @@ def process_instruction(prompt: str, launcher: AgyLauncher, system_controller: S
 
     if handled:
         launcher.record_system_action(prompt, message)
+        action_time = datetime.now().strftime("%H:%M:%S")
         panel = Panel(
             Markdown(message),
-            title="[bold green]⚡ Acción del Sistema[/bold green]",
+            title=f"[bold green]⚡ Acción del Sistema[/bold green] [dim]• {action_time}[/dim]",
             border_style="green",
             padding=(1, 2)
         )
@@ -213,6 +216,8 @@ def handle_text_mode(launcher: AgyLauncher, audio_engine: AudioEngine, system_co
 
     continue_running = True
     if user_input:
+        prompt_time = datetime.now().strftime("%H:%M:%S")
+        console.print(f"[dim][{prompt_time}][/dim] [bold green]📝 Instrucción:[/bold green] \"{user_input}\"")
         handled_dir, _ = try_handle_directory_change(user_input, launcher)
         if not handled_dir:
             continue_running = process_instruction(user_input, launcher, system_controller)
@@ -279,7 +284,8 @@ def main():
                         clean_prompt, is_valid, reason = transcriber.clean_and_validate(raw_prompt)
 
                     if is_valid:
-                        console.print(f"[bold green]📝 Instrucción:[/bold green] \"{clean_prompt}\"")
+                        prompt_time = datetime.now().strftime("%H:%M:%S")
+                        console.print(f"[dim][{prompt_time}][/dim] [bold green]📝 Instrucción:[/bold green] \"{clean_prompt}\"")
                         audio_engine.pause()
                         keep_going = process_instruction(clean_prompt, launcher, system_controller)
                         audio_engine.start()

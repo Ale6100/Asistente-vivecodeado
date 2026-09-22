@@ -9,13 +9,14 @@ Instrucciones para agentes de IA que trabajen en este proyecto. Cumple dos funci
 El **README.md es la documentación única** del proyecto: sirve tanto para humanos como para agentes de IA. Explica qué es el proyecto, cómo está armado y cómo desarrollarlo.
 
 - Al empezar una tarea, leé el README para entender el contexto del proyecto antes de tocar código.
-- El README debe estar **muy bien detallado**: cuanto más completo y preciso, mejor fuente de contexto será (aunque el código siempre manda sobre él).
+- El README debe estar **muy bien detallado en cobertura, no en narración de implementación**: cuanto más completo y preciso sea describiendo qué existe, qué patrón se usa y el *porqué* de una decisión, mejor fuente de contexto será (ejemplo ilustrativo, no necesariamente real en este repo: "las preferencias del usuario se guardan en un storage accesible también desde el backend, en vez de uno exclusivo del cliente, para que el backend no dependa de que el cliente se las envíe" alcanza y sobra) — aunque el código siempre manda sobre él. No es lugar para trazar la cadena de llamadas entre funciones/archivos (ej. enumerar que tal setter llama a tal función de refresco, que tal archivo le pasa tal prop a tal otro, en qué orden se ejecuta cada cosa). Ese nivel de detalle duplica lo que ya cuenta el código, queda desactualizado en cuanto cambia un detalle interno de la implementación (no el contrato/patrón), y agrega carga de mantenimiento sin aportar contexto nuevo. Si al escribir una sección notás que estás describiendo un flujo de llamadas entre piezas internas en vez de un concepto, contrato o decisión, es señal de resumir a una o dos oraciones o de sacarlo directamente del README.
 - **Obligación proactiva de edición del README**: cuando un cambio afecte cualquier cosa que documente el README (instalación, scripts, variables de entorno, arquitectura, endpoints, estructura de carpetas, conteo de archivos, permisos, decisiones de diseño, etc.) o detectes cualquier discrepancia con la realidad del código, **actualizá el README.md directamente en esa misma iteración usando tus herramientas de edición, sin esperar a que el usuario te lo pida ni pedirle confirmación previa**. NO alcanza con solo avisarlo o mencionarlo en tu reporte: tu deber es aplicar el cambio en el archivo `README.md`.
 - **Checklist obligatorio de cierre de turno**: antes de dar por terminada tu respuesta en cualquier interacción donde se haya tocado, migrado o analizado código, preguntate: *¿Cambiaron archivos, cantidades, tipos, endpoints, rutas o funcionalidades documentadas en el README?* Si la respuesta es sí, **editá el `README.md` de inmediato antes de responder**.
 - No agregues al README nada que no puedas verificar en el código.
-- El README puede incluir detalles internos del desarrollo sin censurarlos. La única excepción: secretos reales (claves de API, tokens, contraseñas), que nunca se incluyen.
+- El README puede incluir detalles internos del desarrollo sin censurarlos: ningún tema es tabú por sí solo (esto es sobre *qué* temas se pueden tocar, no sobre *cuánto* detallarlos — para eso ver el punto sobre nivel de detalle, más arriba). La única excepción real: secretos (claves de API, tokens, contraseñas), que nunca se incluyen.
 - Evitá afirmaciones perecederas ("en breve", "por ahora", "actualmente") tanto en este archivo como en el README: quedan viejas y dependen de que alguien se acuerde de actualizarlas. Escribí solo lo que siga siendo cierto con el tiempo.
 - **Este mismo archivo (`AGENTS.md`) también se mantiene al día**, no solo el README: si durante el trabajo notás que una convención cambió de forma duradera (no una excepción puntual de una sola tarea), actualizalo vos mismo o avisá explícitamente que conviene actualizarlo. Al hacerlo, integrá la regla nueva en la sección temática que corresponda — no la cuelgues suelta al final del archivo, porque así termina siendo una lista desordenada en vez de una guía clara.
+- **`AGENTS.md` tiene que seguir siendo genérico y portable a otros proyectos**: es una guía de proceso y buenas prácticas, no una referencia de este stack o de este repo en particular. Cualquier ejemplo que agregues acá para ilustrar una regla tiene que ser sintético/inventado (como el de `sendNotification()`/`isProduction` de la regla de verificación más abajo), nunca una función, archivo o feature real de este proyecto. Si necesitás ilustrar una regla con algo concreto de este repo, esa mención va en el README o en la respuesta al usuario — no en `AGENTS.md`.
 
 ## Regla de verificación obligatoria
 
@@ -23,7 +24,9 @@ No des nada por hecho por cómo se ve o se llama algo (una función, una variabl
 
 Ejemplo ilustrativo (no es necesariamente real en este repo): si existe una función `sendNotification()` o un flag `isProduction`, no asumas que la primera manda una notificación de verdad ni que el segundo refleja el ambiente real solo por el nombre — leé el cuerpo y confirmá que hacen lo que dicen (y no, por ejemplo, que solo loguean, que están sin terminar, o que el flag está hardcodeado en `true`).
 
-La fuente de la verdad es **siempre el código**. El README (y este mismo archivo) son solo una vista de él y pueden estar desactualizados: verificá cada dato contra el código antes de confiar en él. Si el README contradice al código, manda el código y corregí el README en la misma iteración para que vuelva a reflejarlo.
+Esta misma regla aplica a las **versiones de las dependencias**: antes de proponer, escribir o analizar código que use una librería, framework o herramienta del proyecto, fijate qué versión está realmente declarada/instalada (manifiesto de dependencias, lockfile, o el equivalente del ecosistema que corresponda) — no la que tu conocimiento interno asume por defecto. Un conocimiento genérico de una herramienta falla en dos direcciones posibles: sugerir una API o un patrón de una versión más nueva que la que el proyecto tiene fijada (rompe compatibilidad), o asumir que el proyecto usa la versión vieja/clásica que más conocés cuando en realidad usa una más nueva (perdiéndote features o cambios de esa versión que tu conocimiento no tiene por su fecha de corte). Si tenés dudas sobre cómo se comporta específicamente la versión real que usa el proyecto y contás con capacidad de búsqueda en internet, usala para confirmarlo en vez de asumir.
+
+La fuente de la verdad es **siempre el código (y las versiones que declara)**. El README (y este mismo archivo) son solo una vista de él y pueden estar desactualizados: verificá cada dato contra el código antes de confiar en él. Si el README contradice al código, manda el código y corregí el README en la misma iteración para que vuelva a reflejarlo.
 
 ## Regla contra la invención de datos
 
@@ -48,32 +51,3 @@ El proyecto lo construye un equipo con experiencia variable según el dominio. L
 - Si una decisión actual va a complicar el futuro (modelado flojo, acoplamiento innecesario, dependencias pesadas, etc.), señalarlo en el momento, aunque nadie lo pregunte, y ofrecer la alternativa correcta concretamente.
 - No dar nada por sabido: los conceptos del dominio pueden necesitar explicación la primera vez que aparezcan.
 - Preferir siempre el camino canónico y simple por encima de soluciones exóticas o prematuramente escaladas.
-
-## Autonomía técnica: programar y ejecutar soluciones ante limitaciones
-
-Siempre que se solicite una acción o tarea para la cual no exista un comando directo, herramienta nativa o función preconstruida en el sistema:
-
-- **Programar la solución por iniciativa propia**: No limitarse a responder con una limitación, imposibilidad o falta de comando nativo. Si es técnicamente viable resolverlo mediante software o automatización, el agente debe idear, escribir y ejecutar su propia solución a medida (creando scripts o utilidades en Python, PowerShell, C# u otra tecnología adecuada).
-- **Ejecución y verificación completa**: Desarrollar el código necesario, compilarlo si aplica, ejecutarlo para cumplir la orden y validar el resultado final de punta a punta.
-- **Ubicación organizada en `tools/`**: Todo script auxiliar, programa a medida, código fuente compilable o binario (`.cs`, `.exe`, scripts de automatización externos) debe ubicarse de forma ordenada dentro de la carpeta `tools/` (o subcarpetas específicas dentro de ella), **nunca suelto en la raíz del proyecto**. Si el código principal del asistente necesita invocar el ejecutable o script, debe buscarlo dentro del directorio `tools/`.
-- **Utilidad real y eliminación de redundancias**: No mantener archivos intermedios o en desuso. Todo archivo que resida en el proyecto o en `tools/` debe tener una función activa y justificada. Si una tarea genera un binario ejecutable que es el único consumido en ejecución, se debe evitar dejar archivos de código intermedios en desuso que confundan o generen redundancia, a menos que exista una necesidad explícita de compilación dinámica.
-- **Transparencia y prolijidad**: Explicar con naturalidad y claridad al usuario qué mecanismo se diseñó para resolver el problema, manteniendo el entorno de trabajo limpio y ordenado.
-
-## Limpieza estricta de archivos y recursos temporales
-
-Cualquier recurso, archivo o artefacto transitorio generado para resolver una consulta, análisis, prueba o tarea operativa —incluyendo, pero no limitándose a: capturas de pantalla para inspección visual, scripts efímeros de prueba, volcados de memoria, archivos scratch, imágenes intermedias o registros temporales— debe ser **eliminado de inmediato** una vez cumplido su propósito.
-
-- **Cero basura residual**: Bajo ninguna circunstancia deben quedar archivos transitorios o capturas obsoletas en la carpeta `screenshots/`, en `tools/`, en la raíz del proyecto ni en ubicaciones temporales del sistema una vez finalizada la acción.
-- **Ciclo de vida efímero garantizado**: Si un archivo se crea exclusivamente como apoyo transitorio (por ejemplo, para que la IA inspeccione la pantalla, valide una salida o corra un test puntual), su ciclo de vida concluye en la misma iteración: se procesa/analiza y se purga del disco antes de emitir la respuesta final.
-- **Diferenciación estricta entre permanente y transitorio**: Solo persisten en el repositorio aquellos archivos de código, utilidades activas en `tools/` o documentación que formen parte deliberada y duradera de la arquitectura del proyecto. Todo lo demás es efímero y se elimina automáticamente sin requerir recordatorio del usuario.
-
-
-## Portabilidad absoluta y compatibilidad universal (Windows 10 y 11)
-
-El asistente y todas las herramientas complementarias que se desarrollen deben ser **100% portables** y operar de forma transparente en cualquier equipo con Windows 10 o Windows 11 sin requerir modificaciones ni configuraciones manuales:
-
-- **Prohibición estricta de referencias locales**: Queda totalmente prohibido incluir rutas absolutas fijas (como `C:\Users\<usuario>`), nombres de usuario, identificadores de máquina o referencias a dispositivos de hardware específicos.
-- **Resolución dinámica de rutas y recursos**: Todas las rutas deben obtenerse de forma relativa o dinámica utilizando `os.path.dirname(os.path.abspath(__file__))`, `os.path.expanduser("~")`, variables de entorno estándar de Windows (`%USERPROFILE%`, `%APPDATA%`, `%TEMP%`) o APIs de Windows (`CSIDL_DESKTOP`, COM Shell, etc.).
-- **Diseño agnóstico en `tools/` y scripts auxiliares**: Las utilidades nuevas que se desarrollen deben apoyarse exclusivamente en APIs estándar de Windows, interfaces COM nativas o librerías universales, asegurando que funcionen idénticamente en cualquier instalación limpia de Windows 10 u 11.
-
-

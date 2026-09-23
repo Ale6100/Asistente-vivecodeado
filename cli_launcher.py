@@ -24,6 +24,29 @@ from system_controller import open_url_native, take_screenshot
 
 console = Console()
 
+ACTION_PATTERN = re.compile(
+    r'\[ACTION:\s*(OPEN_URL|OPEN_APP|SCREENSHOT|RESTART)\s*([^\]]*)\]',
+    re.IGNORECASE
+)
+
+def dispatch_single_action(act_type: str, act_target: str, launcher):
+    act_type = act_type.upper()
+    target = act_target.strip().strip('"\'')
+    if act_type == "OPEN_URL":
+        open_url_native(target)
+    elif act_type == "OPEN_APP":
+        try:
+            subprocess.Popen(target, shell=True)
+        except Exception as err:
+            console.print(f"[red]Error al abrir aplicación {target}:[/red] {err}")
+    elif act_type == "SCREENSHOT":
+        saved_path = take_screenshot()
+        if saved_path:
+            console.print(f"[bold green]📸 Captura guardada en:[/bold green] {saved_path}")
+            launcher.record_system_action("Captura de pantalla", f"Captura guardada en: {saved_path}")
+    elif act_type == "RESTART":
+        launcher.restart_requested = True
+
 class AgyLauncher:
     def __init__(self):
         self.agy_cmd = config.AGY_COMMAND
@@ -33,6 +56,7 @@ class AgyLauncher:
         self.assistant_root_dir = os.path.dirname(os.path.abspath(__file__))
         self.current_proc = None
         self.is_busy = False
+        self.restart_requested = False
 
         if config.DEFAULT_PROJECT_DIR and os.path.isdir(config.DEFAULT_PROJECT_DIR):
             self.working_directory = os.path.abspath(config.DEFAULT_PROJECT_DIR)
@@ -168,12 +192,10 @@ class AgyLauncher:
             "Tu respuesta será sintetizada en audio (TTS) para que el usuario la escuche mientras se concentra en su trabajo. "
             f"{history_context}"
             "Directrices esenciales: "
-            "1. Para tareas mecánicas o de apertura directa (abrir páginas web, búsquedas en sitios específicos, abrir apps, multimedia, capturas de pantalla, etc.): incluye al final en su propia línea la directiva `[ACTION: OPEN_URL <url>]`, `[ACTION: OPEN_APP <comando>]` o `[ACTION: SCREENSHOT]`. En estas tareas mecánicas mantén tu mensaje muy breve ya que la confirmación visual y auditiva es suficiente. "
+            "1. Para tareas mecánicas o de apertura directa (abrir páginas web, búsquedas en sitios específicos, abrir apps, capturas de pantalla, o reinicio del asistente tras modificar su código): incluye al final en su propia línea la directiva `[ACTION: OPEN_URL <url>]`, `[ACTION: OPEN_APP <comando>]`, `[ACTION: SCREENSHOT]` o `[ACTION: RESTART]`. En estas tareas mecánicas mantén tu mensaje muy breve ya que la confirmación visual y auditiva es suficiente. "
             "2. Para preguntas, explicaciones, conceptos técnicos, dudas o cuando el usuario pida explicaciones: responde con claridad y de forma completa. Tu respuesta será leída por voz en su totalidad. "
             "3. Para desarrollo: ejecuta las acciones reales (crear/editar archivos, git, comandos) en la carpeta de trabajo y resume el resultado de forma clara. "
             "4. No incluyas bloques de código markdown en el texto conversacional para que la síntesis de voz sea fluida y natural al oído. "
-            "5. Limpieza estricta de temporales: cualquier archivo, captura de pantalla, script o recurso efímero creado para resolver una consulta o análisis debe ser eliminado inmediatamente al terminar su uso, sin dejar basura residual en el disco. "
-            "6. Autonomía resolutiva proactiva: Nunca respondas con una negativa ni digas que no puedes hacer algo o que no está preprogramado si es técnicamente viable resolverlo. Crea al vuelo los scripts temporales, utilidades o capturas necesarias para obtener información o ejecutar la acción, procesa los resultados y elimínalos inmediatamente al finalizar sin dejar basura residual. "
             "\n\nInstrucción del usuario:\n"
         )
 
@@ -249,24 +271,13 @@ class AgyLauncher:
 
                     for line in iter(proc.stdout.readline, ''):
                         accumulated_output.append(line)
-                        for match in re.finditer(r'\[ACTION:\s*(OPEN_URL|OPEN_APP|SCREENSHOT)\s*([^\]]*)\]', line, re.IGNORECASE):
+                        for match in ACTION_PATTERN.finditer(line):
                             act_type = match.group(1).upper()
                             act_target = match.group(2).strip().strip('"\'')
                             act_key = (act_type, act_target)
                             if act_key not in executed_actions:
                                 executed_actions.add(act_key)
-                                if act_type == "OPEN_URL":
-                                    open_url_native(act_target)
-                                elif act_type == "OPEN_APP":
-                                    try:
-                                        subprocess.Popen(act_target, shell=True)
-                                    except Exception as err:
-                                        console.print(f"[red]Error al abrir aplicación {act_target}:[/red] {err}")
-                                elif act_type == "SCREENSHOT":
-                                    saved_path = take_screenshot()
-                                    if saved_path:
-                                        console.print(f"[bold green]📸 Captura guardada en:[/bold green] {saved_path}")
-                                        self.record_system_action("Captura de pantalla", f"Captura guardada en: {saved_path}")
+                                dispatch_single_action(act_type, act_target, self)
 
                     proc.wait()
                     output = "".join(accumulated_output)
@@ -292,31 +303,19 @@ class AgyLauncher:
 
         output_text = output.strip() if output else "Comando completado sin salida."
 
-        action_matches = re.findall(r'\[ACTION:\s*(OPEN_URL|OPEN_APP|SCREENSHOT)\s*([^\]]*)\]', output_text, re.IGNORECASE)
+        action_matches = ACTION_PATTERN.findall(output_text)
         for action_type, action_target in action_matches:
             target = action_target.strip().strip('"\'')
             act_upper = action_type.upper()
             act_key = (act_upper, target)
-            if act_key in executed_actions:
-                continue
-            executed_actions.add(act_key)
-            if act_upper == "OPEN_URL":
-                open_url_native(target)
-            elif act_upper == "OPEN_APP":
-                try:
-                    subprocess.Popen(target, shell=True)
-                except Exception as err:
-                    console.print(f"[red]Error al abrir aplicación {target}:[/red] {err}")
-            elif act_upper == "SCREENSHOT":
-                saved_path = take_screenshot()
-                if saved_path:
-                    console.print(f"[bold green]📸 Captura guardada en:[/bold green] {saved_path}")
-                    self.record_system_action("Captura de pantalla", f"Captura guardada en: {saved_path}")
+            if act_key not in executed_actions:
+                executed_actions.add(act_key)
+                dispatch_single_action(act_upper, target, self)
 
         end_time_str = datetime.now().strftime("%H:%M:%S")
         elapsed_seconds = time.time() - start_time
 
-        clean_text = re.sub(r'\[ACTION:\s*(?:OPEN_URL|OPEN_APP|SCREENSHOT)\s*[^\]]*\]', '', output_text).strip()
+        clean_text = ACTION_PATTERN.sub('', output_text).strip()
         display_text = clean_text if clean_text else "Acción completada."
         panel = Panel(
             Markdown(display_text),

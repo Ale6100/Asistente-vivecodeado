@@ -28,7 +28,7 @@ flowchart TD
     J --> K{"¿Es Acción de Sistema o Búsqueda Web?"}
     
     K -->|"SÍ (Fast-Path <50 ms)"| L["SystemController (APIs Nativas Windows)"]
-    L --> L1["Control de Volumen y Mute (ctypes)"]
+    L --> L1["Control de Volumen, Mute y Multimedia (Play/Pausa, Pistas)"]
     L --> L2["Gestión de Ventanas y Atajos Win+N"]
     L --> L3["Captura de Pantalla (.NET nativo)"]
     L --> L4["Búsquedas Web (Netflix, YouTube, Google...)"]
@@ -40,6 +40,7 @@ flowchart TD
     M --> N["Inyección de Contexto Silencioso de Carpeta"]
     O["Aislamiento de Sesión: agy --project asistente-voz"]
     M --> O
+    O --> S["Action Dispatcher (URL, APP, SCREENSHOT, RESTART)"]
 
     L --> P["Feedback Acústico (sound_effects.py)"]
     O --> P
@@ -80,9 +81,13 @@ flowchart TD
 * **Telemetría y Registro Temporal de Interacciones:**
   * **Estampas de Tiempo en Consola:** Cada instrucción ingresada (tanto por voz como por teclado) se imprime registrando la hora exacta (`[HH:MM:SS]`).
   * **Auditoría de Latencia en Panel de Respuesta:** El panel de respuesta de Antigravity CLI exhibe en su cabecera el horario de recepción y en el subtítulo la duración total en segundos (`Duración: X.Xs`), permitiendo evaluar y depurar tiempos de respuesta de forma limpia y directa.
+* **Reinicio Automático Supervisado:**
+  * Permite recargar el asistente completo en ~1 segundo para aplicar cambios de código o configuración, liberando de forma limpia todos los recursos de bajo nivel (micrófono, hooks de teclado y modelos).
+  * Se activa mediante voz (*"reiniciate"*, *"reiniciar asistente"*), por teclado (`/restart`, `/reiniciar`) o de forma autónoma por la IA (`[ACTION: RESTART]`) tras editar archivos del propio asistente.
+  * Implementa un patrón supervisor mediante código de salida acordado (`42`) soportado tanto en `iniciar_asistente.bat` como en la ejecución directa de `main.py`.
 * **Arquitectura Híbrida de Doble Vía con Despachador de Acciones:**
-  * **Vía Rápida Local (<50 ms):** Reconoce de forma instantánea acciones mecánicas deterministas sobre el sistema operativo (control de volumen, silenciar, capturas de pantalla, ordenar escritorio, minimizar ventanas, atajos de barra de tareas, temporizadores, cronómetro, fecha/hora, modo discreto y búsquedas directas). Incluye soporte de **repetición contextual inmediata** (*"otra"*, *"sacá otra"*, *"hacé otra"*, *"otra captura"*) para repetir la última acción sin latencia. Los patrones están rigurosamente anclados al inicio de la orden imperativa e incorporan filtro de cláusulas explicativas (*"noto que..."*, *"cuando te pido..."*, *"por ejemplo..."*), evitando falsos positivos cuando el usuario reflexiona o conversa.
-  * **Vía Inteligente (Antigravity CLI + Action Dispatcher):** Las consultas con criterios semánticos, comparativos o superlativos (*"el video más visto de..."*, *"el mejor tutorial..."*, análisis de código, control de versiones Git, etc.) son derivadas a la IA con timeout extendido (`AGY_PRINT_TIMEOUT = "20m"`). Tras razonar e investigar, la IA cuenta con directrices esenciales que le exigen autonomía resolutiva proactiva: ante solicitudes no contempladas en comandos nativos, genera dinámicamente scripts o utilidades transitorias, valida los resultados y purga inmediatamente los temporales. Además, puede emitir directivas de escritorio (`[ACTION: OPEN_URL <url>]`, `[ACTION: OPEN_APP <app>]`, `[ACTION: SCREENSHOT]`) que el proceso local ejecuta inmediatamente en la sesión interactiva del usuario mediante `open_url_native` o APIs nativas, garantizando que los enlaces exactos y acciones se reflejen con foco en su pantalla física real.
+  * **Vía Rápida Local (<50 ms):** Reconoce de forma instantánea acciones mecánicas deterministas sobre el sistema operativo: control de volumen y mute, capturas de pantalla, ordenar escritorio, minimizar ventanas, atajos de barra de tareas, temporizadores, cronómetro, fecha/hora, modo discreto, búsquedas directas y reinicio del asistente. Incluye soporte de **repetición contextual inmediata** (*"otra"*, *"sacá otra"*, *"hacé otra"*, *"otra captura"*) para repetir la última acción sin latencia. Los patrones están rigurosamente anclados al inicio de la orden imperativa e incorporan filtro de cláusulas explicativas (*"noto que..."*, *"cuando te pido..."*, *"por ejemplo..."*), evitando falsos positivos cuando el usuario reflexiona o conversa.
+  * **Vía Inteligente (Antigravity CLI + Action Dispatcher):** Las consultas con criterios semánticos, comparativos o superlativos (*"el video más visto de..."*, *"el mejor tutorial..."*, análisis de código, control de versiones Git, etc.) son derivadas a la IA con timeout extendido (`AGY_PRINT_TIMEOUT = "20m"`). Además, dispone de un despachador de directivas de escritorio: apertura web (`[ACTION: OPEN_URL <url>]`), lanzamiento de aplicaciones (`[ACTION: OPEN_APP <app>]`), capturas (`[ACTION: SCREENSHOT]`) y reinicio supervisado (`[ACTION: RESTART]`).
 * **Visión y Lectura Óptica en Caliente (OCR Nativo Windows + Escalamiento Progresivo):**
   * **Enfoque en Ventana Activa (Active Window Focus):** Detecta instantáneamente mediante Win32 API (`user32.dll`) cuál es la aplicación en foco y su título (ej. *"Visual Studio Code"*, *"PowerShell"*), capturando únicamente sus límites visuales e ignorando la barra de tareas, bandejas del sistema y ventanas de fondo.
   * **Nivel 1 - OCR en Memoria Nativo de Windows (0 MB de descarga, 0 GPU):** Ejecuta el motor nativo `Windows.Media.Ocr.OcrEngine` (WinRT) directamente en memoria sin escribir archivos en disco. Extrae texto, trazas de excepción, logs de compilación o código fuente en ~200 ms, inyectándolo como texto plano en el prompt con una economía radical de tokens (ahorro del 80-90% frente a modelos de visión).
@@ -112,8 +117,8 @@ flowchart TD
 * **`audio_engine.py`**: Motor de captura de audio con PortAudio (`sounddevice`). Realiza auto-detección de micrófono, remuestreo dinámico a 16 kHz vía `scipy.signal`, calibración de ruido ambiental y detección de palabra de activación con `openwakeword`.
 * **`transcriber.py`**: Transcripción de voz a texto con `faster-whisper`. Implementa limpieza de patrones léxicos, descarte de muletillas, corrección fonética y validación de órdenes.
 * **`screen_reader.py`**: Motor de captura de ventana activa, OCR en memoria nativo de Windows (`Windows.Media.Ocr`) y enrutamiento inteligente de escalamiento progresivo (texto vs visión multimodal).
-* **`cli_launcher.py`**: Integración con el ejecutable `agy`. Inyecta directivas de contexto silenciosas, análisis de pantalla en caliente, ejecuta el subproceso en la carpeta de trabajo activa, procesa directivas de apertura en el escritorio interactivo (`[ACTION: OPEN_URL/OPEN_APP]`) y coordina la síntesis de audio de la respuesta limpia.
-* **`system_controller.py`**: Controlador nativo del sistema operativo (Fast-Path). Ejecuta instantáneamente (<50 ms) acciones mecánicas de Windows, discriminando consultas literales de aquellas que requieren razonamiento semántico para delegarlas a la IA.
+* **`cli_launcher.py`**: Integración con el ejecutable `agy`. Inyecta directivas de contexto silenciosas, análisis de pantalla en caliente, ejecuta el subproceso en la carpeta de trabajo activa, procesa directivas de apertura en el escritorio interactivo (`[ACTION: OPEN_URL/OPEN_APP/SCREENSHOT/RESTART]`) y coordina la síntesis de audio de la respuesta limpia.
+* **`system_controller.py`**: Controlador nativo del sistema operativo (Fast-Path). Ejecuta instantáneamente (<50 ms) acciones mecánicas de Windows (volumen, ventanas, capturas, búsquedas, alarmas, cronómetro y reinicio), discriminando consultas literales de aquellas que requieren razonamiento semántico para delegarlas a la IA.
 * **`tts_speaker.py`**: Módulo de síntesis de voz (Text-to-Speech) con `edge-tts`, reproducción de audio con `pygame.mixer` y fallback offline a Windows SAPI5 (`System.Speech`).
 * **`sound_effects.py`**: Señalización acústica no bloqueante con `winsound.Beep`.
 * **`config.py`**: Parámetros globales y ajustables del sistema (palabras clave, atajos, modelos, voz, velocidad, silencios, umbrales de OCR).
@@ -226,6 +231,7 @@ Una vez abierto el asistente, puedes interactuar tanto por voz como por teclado:
 | **Alarmas y Temporizadores**| *"Alarma en 5 minutos"* / *"Temporizador de 10 minutos"* | Programa una alerta audible y aviso por voz en segundo plano. |
 | **Cronómetro** | *"Iniciá cronómetro"* / *"Tiempo del cronómetro"* | Controla el cronómetro interno y te informa el tiempo transcurrido. |
 | **Modo Discreto** | *"Modo discreto"* / *"Activar voz"* | Silencia las respuestas de audio o vuelve a activar el habla TTS. |
+| **Reiniciar Asistente** | *"Reiniciate"* / *"Reiniciar asistente"* / `/restart` | Recarga el proceso completo en ~1s aplicando cambios de código y liberando hardware. |
 | **Apagar Asistente** | *"Basta"* / *"Cerrar asistente"* / *"Apágate"* | Finaliza la ejecución del programa de forma ordenada. |
 | **Desarrollo y Razonamiento**| *"Creá un script para ordenar archivos por fecha"* | Despacha la tarea a Antigravity CLI con herramientas y archivos. |
 

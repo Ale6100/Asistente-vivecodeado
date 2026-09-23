@@ -175,6 +175,7 @@ class SystemController:
         self.stopwatch_start_time = None
         self.active_timers = []
         self.last_action = None
+        self.should_restart = False
 
     def handle_command(self, text: str) -> tuple[bool, str, bool, bool]:
         if not text:
@@ -196,7 +197,12 @@ class SystemController:
             return False, "", False, False
 
         if re.match(COMMAND_PREFIX_PATTERN + r'(?:basta|apagate|apágate|cerrar\s+asistente|apagar\s+asistente|adios|adiós|salir\s+del\s+asistente)$', lower):
+            self.should_restart = False
             return True, "Hasta luego. Cerrando asistente.", True, False
+
+        if re.match(COMMAND_PREFIX_PATTERN + r'(?:reiniciate|reiníciate|reiniciar(?:\s+el)?\s+asistente|reinicia\s+el\s+asistente|reiniciá\s+el\s+asistente|reiniciar\s+programa|reiniciar\s+aplicaci[oó]n|reiniciar|/restart|/reiniciar|/reboot)(?:\s+por\s+favor)?$', lower):
+            self.should_restart = True
+            return True, "Reiniciando el asistente...", True, True
 
         if re.match(COMMAND_PREFIX_PATTERN + r'(?:modo\s+discreto|silenciar\s+voz|silencio\s+total|muteate|mutéate|silenciate|silénciate|sin\s+audio|sin\s+voz|no\s+hables|quedate\s+mudo|quéditate\s+mudo)$', lower):
             config.TTS_ENABLED = False

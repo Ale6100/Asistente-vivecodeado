@@ -6,6 +6,8 @@ ANTIGRAVITY VOICE ASSISTANT (Control por Voz y Texto para 'agy')
 import sys
 import os
 import re
+import time
+import subprocess
 
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
@@ -32,6 +34,9 @@ from audio_engine import AudioEngine
 from transcriber import WhisperTranscriber
 from cli_launcher import AgyLauncher
 from system_controller import SystemController
+
+EXIT_CODE_NORMAL = 0
+EXIT_CODE_RESTART = 42
 
 console = Console()
 
@@ -167,20 +172,35 @@ def try_handle_directory_change(text: str, launcher: AgyLauncher) -> tuple[bool,
         return True, ok
     return False, False
 
-def process_instruction(prompt: str, launcher: AgyLauncher, system_controller: SystemController) -> bool:
+def process_instruction(prompt: str, launcher: AgyLauncher, system_controller: SystemController) -> tuple[bool, bool]:
     if try_handle_session_reset(prompt, launcher):
-        return True
+        return True, False
 
     handled_dir, _ = try_handle_directory_change(prompt, launcher)
     if handled_dir:
-        return True
+        return True, False
 
     handled, message, should_exit, speak_response = system_controller.handle_command(prompt)
     if should_exit:
-        console.print(f"\n[bold red]🛑 {message}[/bold red]")
-        if getattr(config, "TTS_ENABLED", True) and speak_response:
-            launcher.speaker.speak(message)
-        return False
+        if system_controller.should_restart:
+            system_controller.should_restart = False
+            action_time = datetime.now().strftime("%H:%M:%S")
+            panel = Panel(
+                Markdown(message),
+                title=f"[bold cyan]🔄 Reinicio del Asistente[/bold cyan] [dim]• {action_time}[/dim]",
+                border_style="cyan",
+                padding=(1, 2)
+            )
+            console.print(panel)
+            sound_effects.play_success()
+            if getattr(config, "TTS_ENABLED", True) and speak_response:
+                launcher.speaker.speak(message)
+            return False, True
+        else:
+            console.print(f"\n[bold red]🛑 {message}[/bold red]")
+            if getattr(config, "TTS_ENABLED", True) and speak_response:
+                launcher.speaker.speak(message)
+            return False, False
 
     if handled:
         launcher.record_system_action(prompt, message)
@@ -195,36 +215,41 @@ def process_instruction(prompt: str, launcher: AgyLauncher, system_controller: S
         sound_effects.play_success()
         if getattr(config, "TTS_ENABLED", True) and speak_response:
             launcher.speaker.speak(message)
-        return True
+        return True, False
 
     launcher.execute_prompt(prompt)
-    return True
+    if getattr(launcher, "restart_requested", False):
+        launcher.restart_requested = False
+        return False, True
 
-def handle_text_mode(launcher: AgyLauncher, audio_engine: AudioEngine, system_controller: SystemController) -> bool:
+    return True, False
+
+def handle_text_mode(launcher: AgyLauncher, audio_engine: AudioEngine, system_controller: SystemController) -> tuple[bool, bool]:
     """
     Pausa el micrófono temporalmente para permitir escribir una orden por teclado
     o cambiar de repositorio con '/cd <ruta>'.
     """
     audio_engine.pause()
     console.print("\n[bold cyan]⌨️ Modo Escritura activado.[/bold cyan]")
-    console.print("[dim]Escribe tu orden para Antigravity, '/cd <ruta>' para cambiar de proyecto, o '/new' para reiniciar memoria (Enter vacío para cancelar):[/dim]")
+    console.print("[dim]Escribe tu orden para Antigravity, '/cd <ruta>' para cambiar de proyecto, '/restart' para reiniciar o '/new' para reiniciar memoria (Enter vacío para cancelar):[/dim]")
 
     try:
         user_input = input("👉 ").strip()
     except Exception:
         user_input = ""
 
-    continue_running = True
+    continue_running, should_restart = True, False
     if user_input:
         prompt_time = datetime.now().strftime("%H:%M:%S")
         console.print(f"[dim][{prompt_time}][/dim] [bold green]📝 Instrucción:[/bold green] \"{user_input}\"")
         handled_dir, _ = try_handle_directory_change(user_input, launcher)
         if not handled_dir:
-            continue_running = process_instruction(user_input, launcher, system_controller)
+            continue_running, should_restart = process_instruction(user_input, launcher, system_controller)
 
     audio_engine.start()
-    console.print("\n[bold green]🟢 Listo.[/bold green] Esperando comando por voz o pulsa [Enter] para escribir...\n")
-    return continue_running
+    if continue_running and not should_restart:
+        console.print("\n[bold green]🟢 Listo.[/bold green] Esperando comando por voz o pulsa [Enter] para escribir...\n")
+    return continue_running, should_restart
 
 def main():
     launcher_ref = [None]
@@ -244,7 +269,7 @@ def main():
             system_controller = SystemController(speaker=launcher.speaker)
     except Exception as e:
         console.print(f"[bold red]❌ Error al inicializar:[/bold red] {e}")
-        return
+        return EXIT_CODE_NORMAL
 
     model_name, reasoning_effort = launcher.get_model_info()
     print_banner(formatted_ptt, formatted_interrupt, audio_engine.device_name, launcher.working_directory, model_name, reasoning_effort)
@@ -257,14 +282,17 @@ def main():
 
     audio_engine.start()
 
-
+    should_restart = False
     try:
         while True:
             # 1. Modo teclado (Enter o T)
             if MSVCRT_AVAILABLE and msvcrt.kbhit():
                 key = msvcrt.getwch()
                 if key in ('\r', '\n', 't', 'T'):
-                    keep_going = handle_text_mode(launcher, audio_engine, system_controller)
+                    keep_going, restart_flag = handle_text_mode(launcher, audio_engine, system_controller)
+                    if restart_flag:
+                        should_restart = True
+                        break
                     if not keep_going:
                         break
                     continue
@@ -287,7 +315,10 @@ def main():
                         prompt_time = datetime.now().strftime("%H:%M:%S")
                         console.print(f"[dim][{prompt_time}][/dim] [bold green]📝 Instrucción:[/bold green] \"{clean_prompt}\"")
                         audio_engine.pause()
-                        keep_going = process_instruction(clean_prompt, launcher, system_controller)
+                        keep_going, restart_flag = process_instruction(clean_prompt, launcher, system_controller)
+                        if restart_flag:
+                            should_restart = True
+                            break
                         audio_engine.start()
                         if not keep_going:
                             break
@@ -308,5 +339,21 @@ def main():
         if hotkey_listener is not None:
             hotkey_listener.stop()
 
+    return EXIT_CODE_RESTART if should_restart else EXIT_CODE_NORMAL
+
 if __name__ == "__main__":
-    main()
+    if os.environ.get("ASSISTANT_RUNNER") == "bat" or os.environ.get("ASSISTANT_CHILD") == "1":
+        exit_code = main()
+        sys.exit(exit_code)
+    else:
+        while True:
+            cmd = [sys.executable] + sys.argv
+            child_env = dict(os.environ, ASSISTANT_CHILD="1")
+            try:
+                code = subprocess.call(cmd, env=child_env)
+            except KeyboardInterrupt:
+                sys.exit(EXIT_CODE_NORMAL)
+            if code == EXIT_CODE_RESTART:
+                time.sleep(0.8)
+                continue
+            sys.exit(code)

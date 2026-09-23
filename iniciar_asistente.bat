@@ -86,10 +86,19 @@ echo [OK] Todas las dependencias se instalaron y verificaron correctamente.
 echo.
 
 :run_assistant
-
+set ASSISTANT_RUNNER=bat
 venv\Scripts\python.exe main.py
-if %errorlevel% neq 0 (
+set EXIT_CODE=%errorlevel%
+
+if %EXIT_CODE% equ 42 (
     echo.
-    echo [!] El asistente finalizo con codigo %errorlevel%.
+    echo [*] Reiniciando asistente...
+    timeout /t 1 /nobreak > nul
+    goto :run_assistant
+)
+
+if %EXIT_CODE% neq 0 (
+    echo.
+    echo [!] El asistente finalizo con codigo %EXIT_CODE%.
 )
 pause
